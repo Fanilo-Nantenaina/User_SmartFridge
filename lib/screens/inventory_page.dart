@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_smartfridge/main.dart';
+import 'package:user_smartfridge/service/api_service.dart';
+import 'package:user_smartfridge/service/realtime_service.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
+
+import '../service/realtime_service.dart';
 
 class InventoryPage extends StatefulWidget {
   const InventoryPage({Key? key}) : super(key: key);
@@ -11,6 +17,8 @@ class InventoryPage extends StatefulWidget {
 
 class _InventoryPageState extends State<InventoryPage> with SingleTickerProviderStateMixin {
   final ClientApiService _api = ClientApiService();
+  late RealtimeService _realtimeService;
+
   List<dynamic> _inventory = [];
   List<dynamic> _filteredInventory = [];
   List<dynamic> _products = [];
@@ -18,6 +26,8 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
   int? _selectedFridgeId;
   String _searchQuery = '';
   late TabController _tabController;
+
+  StreamSubscription<InventoryUpdateEvent>? _realtimeSubscription;
 
   @override
   void initState() {
@@ -30,6 +40,8 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
   @override
   void dispose() {
     _tabController.dispose();
+    _realtimeSubscription?.cancel();
+    _realtimeService.dispose();
     super.dispose();
   }
 
@@ -53,30 +65,84 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
         _filterInventory();
         _isLoading = false;
       });
+
+      // ✅ Démarrer l'écoute temps réel APRÈS le premier chargement
+      _startRealtimeListener();
+
     } catch (e) {
       setState(() => _isLoading = false);
-
-      if (e.toString().contains('Non autorisé') || e.toString().contains('401')) {
-        await _api.logout();
-        if (mounted) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const LoginPage()),
-                (route) => false,
-          );
-        }
-      } else {
-        _showError('Erreur: $e');
-      }
+      _handleError(e);
     }
+  }
+
+  /// ✅ NOUVEAU : Écoute les événements temps réel
+  Future<void> _startRealtimeListener() async {
+    if (_selectedFridgeId == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    var accessToken = prefs.getString('access_token');
+    var refreshToken = prefs.getString('refresh_token');
+
+    _realtimeService = RealtimeService(
+      baseUrl: ClientApiService.baseUrl,
+      accessToken: accessToken!,
+      fridgeId: _selectedFridgeId!,
+    );
+
+    _realtimeSubscription = _realtimeService
+        .listenToInventoryUpdates()
+        .listen(
+          (event) {
+        print('📡 Événement reçu: ${event.type}');
+
+        // Afficher une notification
+        _showRealtimeNotification(event);
+
+        // Recharger l'inventaire automatiquement
+        _loadInventory();
+      },
+      onError: (error) {
+        print('❌ Erreur temps réel: $error');
+      },
+    );
+  }
+
+  void _showRealtimeNotification(InventoryUpdateEvent event) {
+    final icon = switch (event.type) {
+      InventoryUpdateType.updated => Icons.update,
+      InventoryUpdateType.consumed => Icons.remove_circle_outline,
+      InventoryUpdateType.alert => Icons.warning,
+      InventoryUpdateType.expired => Icons.dangerous,
+    };
+
+    final color = switch (event.type) {
+      InventoryUpdateType.updated => Colors.blue,
+      InventoryUpdateType.consumed => Colors.green,
+      InventoryUpdateType.alert => Colors.orange,
+      InventoryUpdateType.expired => Colors.red,
+    };
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(event.message)),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   void _filterInventory() {
     final now = DateTime.now();
-
     setState(() {
       List<dynamic> filtered = _inventory;
 
-      // Apply search
       if (_searchQuery.isNotEmpty) {
         filtered = filtered.where((item) {
           final productName = _getProductName(item['product_id']);
@@ -84,7 +150,6 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
         }).toList();
       }
 
-      // Apply tab filter
       switch (_tabController.index) {
         case 0: // Tous
           _filteredInventory = filtered;
@@ -112,6 +177,20 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
       return product['name'] ?? 'Produit #$productId';
     } catch (e) {
       return 'Produit #$productId';
+    }
+  }
+
+  void _handleError(dynamic e) {
+    if (e.toString().contains('Non autorisé') || e.toString().contains('401')) {
+      _api.logout();
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+              (route) => false,
+        );
+      }
+    } else {
+      _showError('Erreur: $e');
     }
   }
 
@@ -145,12 +224,8 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddItemDialog,
-        backgroundColor: const Color(0xFF3B82F6),
-        icon: const Icon(Icons.add),
-        label: const Text('Ajouter'),
-      ),
+      // ❌ SUPPRIMÉ : Plus de FloatingActionButton pour ajouter des produits
+      // Les produits sont ajoutés UNIQUEMENT depuis le kiosk via vision
     );
   }
 
@@ -273,26 +348,11 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
             ),
             const SizedBox(height: 8),
             const Text(
-              'Commencez par ajouter\ndes produits à votre frigo',
+              'Scannez des produits depuis le frigo\npour remplir votre inventaire',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Color(0xFF64748B),
                 height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: _showAddItemDialog,
-              icon: const Icon(Icons.add),
-              label: const Text('Ajouter un produit'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3B82F6),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
               ),
             ),
           ],
@@ -519,37 +579,19 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
               _buildDetailRow('Expiration', _formatExpiryDate(item['expiry_date'])),
             _buildDetailRow('Source', item['source'] ?? 'Manuel'),
             const SizedBox(height: 24),
+            // ✅ SEULE ACTION AUTORISÉE : Consommer
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: ElevatedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
                       _showConsumeDialog(item);
                     },
                     icon: const Icon(Icons.remove_circle_outline),
                     label: const Text('Consommer'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF3B82F6),
-                      side: const BorderSide(color: Color(0xFF3B82F6)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _showDeleteConfirmation(item);
-                    },
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Text('Supprimer'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444),
+                      backgroundColor: const Color(0xFF3B82F6),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       elevation: 0,
@@ -614,14 +656,6 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
                 _showConsumeDialog(item);
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Color(0xFFEF4444)),
-              title: const Text('Supprimer', style: TextStyle(color: Color(0xFFEF4444))),
-              onTap: () {
-                Navigator.pop(context);
-                _showDeleteConfirmation(item);
-              },
-            ),
           ],
         ),
       ),
@@ -679,151 +713,6 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
             child: const Text('Confirmer'),
           ),
         ],
-      ),
-    );
-  }
-
-  Future<void> _showDeleteConfirmation(Map<String, dynamic> item) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Supprimer'),
-        content: Text(
-          'Voulez-vous vraiment supprimer ${_getProductName(item['product_id'])} ?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
-              foregroundColor: Colors.white,
-              elevation: 0,
-            ),
-            child: const Text('Supprimer'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        await _api.deleteInventoryItem(
-          fridgeId: _selectedFridgeId!,
-          itemId: item['id'],
-        );
-        _showSuccess('Article supprimé');
-        _loadInventory();
-      } catch (e) {
-        _showError('Erreur: $e');
-      }
-    }
-  }
-
-  Future<void> _showAddItemDialog() async {
-    int? selectedProductId;
-    final qtyController = TextEditingController(text: '1');
-    DateTime? selectedDate;
-
-    await showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Ajouter un produit'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<int>(
-                  decoration: InputDecoration(
-                    labelText: 'Produit',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  items: _products.map<DropdownMenuItem<int>>((product) {
-                    return DropdownMenuItem<int>(
-                      value: product['id'],
-                      child: Text(product['name']),
-                    );
-                  }).toList(),
-                  onChanged: (value) => selectedProductId = value,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: qtyController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Quantité',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                InkWell(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: DateTime.now().add(const Duration(days: 7)),
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (date != null) {
-                      setState(() => selectedDate = date);
-                    }
-                  },
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: 'Date d\'expiration',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: Text(
-                      selectedDate != null
-                          ? DateFormat('dd/MM/yyyy').format(selectedDate!)
-                          : 'Sélectionner une date',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Annuler'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (selectedProductId == null) {
-                  _showError('Sélectionnez un produit');
-                  return;
-                }
-
-                try {
-                  await _api.addInventoryItem(
-                    fridgeId: _selectedFridgeId!,
-                    productId: selectedProductId!,
-                    quantity: double.parse(qtyController.text),
-                    expiryDate: selectedDate?.toIso8601String().split('T')[0],
-                  );
-                  Navigator.pop(context);
-                  _showSuccess('Produit ajouté');
-                  _loadInventory();
-                } catch (e) {
-                  _showError('Erreur: $e');
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3B82F6),
-                foregroundColor: Colors.white,
-                elevation: 0,
-              ),
-              child: const Text('Ajouter'),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:user_smartfridge/main.dart';
+import 'package:user_smartfridge/service/api_service.dart';
 
 class RecipesPage extends StatefulWidget {
   const RecipesPage({Key? key}) : super(key: key);

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:user_smartfridge/main.dart';
+import 'package:user_smartfridge/screens/notification_settings_page.dart';
+import 'package:user_smartfridge/service/api_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -395,6 +397,19 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
       child: Column(
         children: [
+          _buildSettingsTile(
+            Icons.notifications_outlined,
+            'Notifications',
+            'Son, vibration, alertes',
+                () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const NotificationSettingsPage(),
+                ),
+              );
+            },
+          ),
           _buildSettingsTile(
             Icons.edit_outlined,
             'Modifier le profil',
