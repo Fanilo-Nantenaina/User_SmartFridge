@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:user_smartfridge/main.dart';
-import 'package:user_smartfridge/screens/notification_settings_page.dart';
-import 'package:user_smartfridge/service/api_service.dart';
+import 'package:user_smartfridge/screens/notification_settings.dart';
+import 'package:user_smartfridge/service/api.dart';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({Key? key}) : super(key: key);
+  const ProfilePage({super.key});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -539,8 +539,6 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
-
-  // ===== DIALOGS =====
 
   Future<void> _showEditProfileDialog() async {
     final nameController = TextEditingController(text: _user?['name']);

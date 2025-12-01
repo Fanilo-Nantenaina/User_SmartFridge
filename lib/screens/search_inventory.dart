@@ -1,19 +1,12 @@
-// ============================================================================
-// lib/screens/search_inventory_page.dart
-// ============================================================================
-// ✅ Recherche intelligente avec fuzzy matching
-// ✅ Commande vocale (Speech-to-Text)
-// ✅ Réponse vocale (Text-to-Speech)
-// ============================================================================
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:user_smartfridge/service/api_service.dart';
+import 'package:user_smartfridge/service/api.dart';
 import 'package:intl/intl.dart';
 
 class SearchInventoryPage extends StatefulWidget {
-  const SearchInventoryPage({Key? key}) : super(key: key);
+  const SearchInventoryPage({super.key});
 
   @override
   State<SearchInventoryPage> createState() => _SearchInventoryPageState();
@@ -24,18 +17,15 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
   final ClientApiService _api = ClientApiService();
   final TextEditingController _searchController = TextEditingController();
 
-  // Reconnaissance vocale
   late stt.SpeechToText _speech;
   late FlutterTts _tts;
   bool _isListening = false;
 
-  // Résultats
   List<dynamic> _allInventory = [];
   List<dynamic> _filteredResults = [];
   bool _isLoading = false;
   bool _hasSearched = false;
 
-  // Animation
   late AnimationController _animationController;
   late Animation<double> _pulseAnimation;
 
@@ -94,9 +84,6 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
     }
   }
 
-  // ==========================================
-  // RECHERCHE INTELLIGENTE
-  // ==========================================
   void _performSearch(String query) {
     if (query.isEmpty) {
       setState(() {
@@ -108,30 +95,24 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
 
     setState(() => _hasSearched = true);
 
-    // Normaliser la requête
     final normalizedQuery = _normalizeQuery(query.toLowerCase());
 
-    // Recherche intelligente
     final results = _allInventory.where((item) {
       final productName = (item['product']?['name'] ?? '').toLowerCase();
       final category = (item['product']?['category'] ?? '').toLowerCase();
 
-      // Correspondance exacte ou partielle
       return productName.contains(normalizedQuery) ||
           category.contains(normalizedQuery) ||
           _fuzzyMatch(productName, normalizedQuery);
     }).toList();
 
-    // Trier par pertinence
     results.sort((a, b) {
       final nameA = (a['product']?['name'] ?? '').toLowerCase();
       final nameB = (b['product']?['name'] ?? '').toLowerCase();
 
-      // Exact match en premier
       if (nameA.startsWith(normalizedQuery)) return -1;
       if (nameB.startsWith(normalizedQuery)) return 1;
 
-      // Puis contains
       if (nameA.contains(normalizedQuery) && !nameB.contains(normalizedQuery)) return -1;
       if (!nameA.contains(normalizedQuery) && nameB.contains(normalizedQuery)) return 1;
 
@@ -140,7 +121,6 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
 
     setState(() => _filteredResults = results);
 
-    // Si un seul résultat, annoncer vocalement
     if (results.length == 1) {
       _announceResult(results[0]);
     } else if (results.isEmpty) {
@@ -151,7 +131,6 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
   }
 
   String _normalizeQuery(String query) {
-    // Supprimer les mots courants
     final stopWords = [
       'combien', 'reste', 'il', 'de', 'me', 'ai', 'je',
       'dans', 'mon', 'le', 'la', 'les', 'un', 'une', 'des',
@@ -180,19 +159,20 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
     return queryIndex == query.length;
   }
 
-  // ==========================================
-  // RECONNAISSANCE VOCALE
-  // ==========================================
   Future<void> _startListening() async {
     bool available = await _speech.initialize(
       onStatus: (status) {
-        print('Speech status: $status');
+        if (kDebugMode) {
+          print('Speech status: $status');
+        }
         if (status == 'done' || status == 'notListening') {
           setState(() => _isListening = false);
         }
       },
       onError: (error) {
-        print('Speech error: $error');
+        if (kDebugMode) {
+          print('Speech error: $error');
+        }
         setState(() => _isListening = false);
         _showError('Erreur: ${error.errorMsg}');
       },
@@ -228,9 +208,6 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
     setState(() => _isListening = false);
   }
 
-  // ==========================================
-  // ANNONCE VOCALE
-  // ==========================================
   Future<void> _speak(String text) async {
     await _tts.speak(text);
   }
@@ -266,9 +243,6 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
     );
   }
 
-  // ==========================================
-  // UI
-  // ==========================================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -313,7 +287,6 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
           ),
           const SizedBox(height: 16),
 
-          // Barre de recherche
           Row(
             children: [
               Expanded(
@@ -352,7 +325,6 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
               ),
               const SizedBox(width: 12),
 
-              // Bouton microphone
               ScaleTransition(
                 scale: _isListening ? _pulseAnimation : const AlwaysStoppedAnimation(1.0),
                 child: Container(
@@ -384,7 +356,6 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
             ],
           ),
 
-          // Suggestions de recherche
           if (!_hasSearched) ...[
             const SizedBox(height: 16),
             const Text(
@@ -408,7 +379,6 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
             ),
           ],
 
-          // Indicateur vocal
           if (_isListening) ...[
             const SizedBox(height: 16),
             Container(

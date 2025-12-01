@@ -1,13 +1,9 @@
-// ============================================================================
-// lib/screens/notification_settings_page.dart
-// ============================================================================
-
 import 'package:flutter/material.dart';
-import 'package:user_smartfridge/service/notification_service.dart';
+import 'package:user_smartfridge/service/notification.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class NotificationSettingsPage extends StatefulWidget {
-  const NotificationSettingsPage({Key? key}) : super(key: key);
+  const NotificationSettingsPage({super.key});
 
   @override
   State<NotificationSettingsPage> createState() => _NotificationSettingsPageState();
@@ -16,13 +12,11 @@ class NotificationSettingsPage extends StatefulWidget {
 class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   final NotificationService _notificationService = NotificationService();
 
-  // Préférences notifications
   bool _expiryNotifications = true;
   bool _lostItemNotifications = true;
   bool _lowStockNotifications = true;
   bool _inventoryUpdates = true;
 
-  // Préférences son/vibration
   bool _vibration = true;
   bool _sound = true;
 

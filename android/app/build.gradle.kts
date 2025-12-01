@@ -58,7 +58,7 @@ flutter {
 }
 
 dependencies {
-    // Desugaring (version actuelle stable : 2.0.3)
+    // Desugaring
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     // Firebase BoM
@@ -68,7 +68,7 @@ dependencies {
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-messaging")
 
-    // AndroidX (mises à jour mineures)
+    // AndroidX
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.multidex:multidex:2.0.1")

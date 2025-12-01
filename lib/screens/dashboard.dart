@@ -1,13 +1,6 @@
-// ============================================================================
-// lib/screens/dashboard_page.dart - VERSION REFACTORISÉE
-// ============================================================================
-// ✅ Cohérent avec le nouveau système de pairing
-// ✅ Dialog simplifié sans création manuelle de frigo
-// ============================================================================
-
 import 'package:flutter/material.dart';
-import 'package:user_smartfridge/screens/search_inventory_page.dart';
-import 'package:user_smartfridge/service/api_service.dart';
+import 'package:user_smartfridge/screens/search_inventory.dart';
+import 'package:user_smartfridge/service/api.dart';
 import '../main.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -414,7 +407,6 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 12),
           Row(
             children: [
-              // ✅ NOUVEAU : Recherche vocale
               Expanded(
                 child: _buildActionCard(
                   'Rechercher',
@@ -519,10 +511,6 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
   }
-
-  // ============================================================================
-  // ✅ NOUVEAU : DIALOG DE PAIRING SIMPLIFIÉ
-  // ============================================================================
 
   Future<void> _showPairingDialog() async {
     final codeController = TextEditingController();
@@ -665,7 +653,6 @@ class _DashboardPageState extends State<DashboardPage> {
                 setState(() => isProcessing = true);
 
                 try {
-                  // ✅ APPEL SIMPLIFIÉ : Une seule route fait tout
                   final result = await _api.pairFridge(
                     pairingCode: codeController.text,
                     fridgeName: nameController.text,
@@ -676,7 +663,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
                   Navigator.pop(context);
 
-                  // Afficher confirmation
                   showDialog(
                     context: context,
                     builder: (context) => AlertDialog(

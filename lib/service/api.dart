@@ -1,27 +1,14 @@
-// ============================================================================
-// lib/services/api_service.dart - VERSION REFACTORISÉE COMPLÈTE
-// ============================================================================
-// ✅ Cohérent avec le nouveau backend (fridges.py)
-// ✅ Gestion correcte du pairing simplifié
-// ✅ Gestion d'erreurs robuste avec timeouts
-// ============================================================================
-
 import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ClientApiService {
-  // ⚠️ CONFIGURATION : Remplacer par l'IP réelle de votre backend
   static const String baseUrl = 'http://10.0.2.2:8000/api/v1';
   static const Duration timeout = Duration(seconds: 30);
 
   String? _accessToken;
   String? _refreshToken;
-
-  // ============================================================================
-  // INITIALIZATION
-  // ============================================================================
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
@@ -44,10 +31,6 @@ class ClientApiService {
       'Authorization': 'Bearer $_accessToken',
     };
   }
-
-  // ============================================================================
-  // AUTHENTICATION
-  // ============================================================================
 
   Future<void> register({
     required String email,
@@ -133,10 +116,6 @@ class ClientApiService {
     await prefs.remove('refresh_token');
   }
 
-  // ============================================================================
-  // USER MANAGEMENT
-  // ============================================================================
-
   Future<Map<String, dynamic>> getCurrentUser() async {
     final response = await http
         .get(
@@ -179,16 +158,6 @@ class ClientApiService {
     throw Exception('Échec de mise à jour');
   }
 
-  // ============================================================================
-  // FRIDGE MANAGEMENT - ✅ NOUVEAU SYSTÈME DE PAIRING
-  // ============================================================================
-
-  /// ✅ NOUVEAU : Pairing unifié (crée automatiquement le frigo)
-  ///
-  /// Flow simplifié :
-  /// 1. Le kiosk affiche un code 6 chiffres
-  /// 2. L'utilisateur entre ce code dans l'app
-  /// 3. Cette route crée le frigo ET le lie à l'utilisateur
   Future<Map<String, dynamic>> pairFridge({
     required String pairingCode,
     String? fridgeName,
@@ -220,7 +189,6 @@ class ClientApiService {
     }
   }
 
-  /// Liste tous les frigos de l'utilisateur
   Future<List<dynamic>> getFridges() async {
     final response = await http
         .get(
@@ -237,7 +205,6 @@ class ClientApiService {
     throw Exception('Erreur ${response.statusCode}');
   }
 
-  /// Récupère les détails d'un frigo
   Future<Map<String, dynamic>> getFridge(int fridgeId) async {
     final response = await http
         .get(
@@ -252,7 +219,6 @@ class ClientApiService {
     throw Exception('Frigo non trouvé');
   }
 
-  /// Met à jour le nom/localisation du frigo
   Future<Map<String, dynamic>> updateFridge({
     required int fridgeId,
     String? name,
@@ -276,7 +242,6 @@ class ClientApiService {
     throw Exception('Échec de mise à jour');
   }
 
-  /// Délie un frigo (unpair)
   Future<void> unpairFridge(int fridgeId) async {
     final response = await http
         .delete(
@@ -289,10 +254,6 @@ class ClientApiService {
       throw Exception('Échec de suppression');
     }
   }
-
-  // ============================================================================
-  // INVENTORY MANAGEMENT
-  // ============================================================================
 
   Future<List<dynamic>> getInventory(int fridgeId) async {
     final response = await http
@@ -326,10 +287,6 @@ class ClientApiService {
     }
   }
 
-  // ============================================================================
-  // PRODUCTS
-  // ============================================================================
-
   Future<List<dynamic>> getProducts({String? search}) async {
     var url = '$baseUrl/products?limit=100';
     if (search != null && search.isNotEmpty) {
@@ -348,10 +305,6 @@ class ClientApiService {
     }
     throw Exception('Erreur de chargement');
   }
-
-  // ============================================================================
-  // ALERTS
-  // ============================================================================
 
   Future<List<dynamic>> getAlerts(int fridgeId, {String? status}) async {
     var url = '$baseUrl/fridges/$fridgeId/alerts';
@@ -387,10 +340,6 @@ class ClientApiService {
       throw Exception('Échec de mise à jour');
     }
   }
-
-  // ============================================================================
-  // RECIPES
-  // ============================================================================
 
   Future<List<dynamic>> getRecipes() async {
     final response = await http
@@ -459,10 +408,6 @@ class ClientApiService {
       throw Exception('Échec de suppression');
     }
   }
-
-  // ============================================================================
-  // SHOPPING LISTS
-  // ============================================================================
 
   Future<Map<String, dynamic>> generateShoppingList({
     required int fridgeId,

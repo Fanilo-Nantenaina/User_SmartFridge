@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:user_smartfridge/main.dart';
-import 'package:user_smartfridge/service/api_service.dart';
+import 'package:user_smartfridge/service/api.dart';
 
 class AlertsPage extends StatefulWidget {
-  const AlertsPage({Key? key}) : super(key: key);
+  const AlertsPage({super.key});
 
   @override
   State<AlertsPage> createState() => _AlertsPageState();

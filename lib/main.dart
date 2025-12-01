@@ -1,17 +1,15 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz;
-import 'package:user_smartfridge/screens/alerts_page.dart';
-import 'package:user_smartfridge/screens/dashboard_page.dart';
-import 'package:user_smartfridge/screens/inventory_page.dart';
-import 'package:user_smartfridge/screens/profile_page.dart';
-import 'package:user_smartfridge/screens/recipes_page.dart';
-import 'package:user_smartfridge/service/api_service.dart';
-import 'package:user_smartfridge/service/notification_service.dart';
+import 'package:user_smartfridge/screens/alerts.dart';
+import 'package:user_smartfridge/screens/dashboard.dart';
+import 'package:user_smartfridge/screens/inventory.dart';
+import 'package:user_smartfridge/screens/profile.dart';
+import 'package:user_smartfridge/screens/recipes.dart';
+import 'package:user_smartfridge/service/api.dart';
+import 'package:user_smartfridge/service/notification.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,9 +57,8 @@ class SmartFridgeClientApp extends StatelessWidget {
   }
 }
 
-// Auth Wrapper
 class AuthWrapper extends StatefulWidget {
-  const AuthWrapper({Key? key}) : super(key: key);
+  const AuthWrapper({super.key});
 
   @override
   State<AuthWrapper> createState() => _AuthWrapperState();
@@ -97,9 +94,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 }
 
-// ============= LOGIN PAGE =============
 class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -114,7 +110,6 @@ class _LoginPageState extends State<LoginPage> {
   bool _isRegisterMode = false;
   bool _obscurePassword = true;
 
-  // ✅ FIX 1: Ajouter un timeout pour éviter le freeze infini
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -123,7 +118,6 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final api = ClientApiService();
 
-      // ✅ Timeout de 15 secondes
       if (_isRegisterMode) {
         await api.register(
           email: _emailController.text,
@@ -230,7 +224,6 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 48),
 
-                  // Form fields
                   if (_isRegisterMode) ...[
                     _buildTextField(
                       controller: _nameController,
@@ -245,7 +238,7 @@ class _LoginPageState extends State<LoginPage> {
                     label: 'Email',
                     icon: Icons.email_outlined,
                     keyboardType: TextInputType.emailAddress,
-                    validator: (v) => v?.isEmpty ?? true || !v!.contains('@')
+                    validator: (v) => v?.isEmpty ?? true
                         ? 'Email invalide' : null,
                   ),
                   const SizedBox(height: 16),
@@ -258,7 +251,7 @@ class _LoginPageState extends State<LoginPage> {
                       icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
-                    validator: (v) => v?.isEmpty ?? true || v!.length < 6
+                    validator: (v) => v?.isEmpty ?? true
                         ? 'Min. 6 caractères' : null,
                   ),
                   const SizedBox(height: 32),
@@ -295,7 +288,6 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Toggle mode
                   TextButton(
                     onPressed: _isLoading ? null : () => setState(() {
                       _isRegisterMode = !_isRegisterMode;
@@ -358,9 +350,8 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-// ============= HOME PAGE WITH NAVIGATION =============
 class HomePage extends StatefulWidget {
-  const HomePage({Key? key}) : super(key: key);
+  const HomePage({super.key});
 
   @override
   State<HomePage> createState() => _HomePageState();

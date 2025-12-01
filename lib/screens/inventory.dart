@@ -1,15 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_smartfridge/main.dart';
-import 'package:user_smartfridge/service/api_service.dart';
-import 'package:user_smartfridge/service/realtime_service.dart';
+import 'package:user_smartfridge/service/api.dart';
+import 'package:user_smartfridge/service/realtime.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 
-import '../service/realtime_service.dart';
-
 class InventoryPage extends StatefulWidget {
-  const InventoryPage({Key? key}) : super(key: key);
+  const InventoryPage({super.key});
 
   @override
   State<InventoryPage> createState() => _InventoryPageState();
@@ -66,7 +65,6 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
         _isLoading = false;
       });
 
-      // ✅ Démarrer l'écoute temps réel APRÈS le premier chargement
       _startRealtimeListener();
 
     } catch (e) {
@@ -75,13 +73,11 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
     }
   }
 
-  /// ✅ NOUVEAU : Écoute les événements temps réel
   Future<void> _startRealtimeListener() async {
     if (_selectedFridgeId == null) return;
 
     final prefs = await SharedPreferences.getInstance();
     var accessToken = prefs.getString('access_token');
-    var refreshToken = prefs.getString('refresh_token');
 
     _realtimeService = RealtimeService(
       baseUrl: ClientApiService.baseUrl,
@@ -93,16 +89,18 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
         .listenToInventoryUpdates()
         .listen(
           (event) {
-        print('📡 Événement reçu: ${event.type}');
+        if (kDebugMode) {
+          print('Événement reçu: ${event.type}');
+        }
 
-        // Afficher une notification
         _showRealtimeNotification(event);
 
-        // Recharger l'inventaire automatiquement
         _loadInventory();
       },
       onError: (error) {
-        print('❌ Erreur temps réel: $error');
+        if (kDebugMode) {
+          print('Erreur temps réel: $error');
+        }
       },
     );
   }
@@ -151,17 +149,17 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
       }
 
       switch (_tabController.index) {
-        case 0: // Tous
+        case 0:
           _filteredInventory = filtered;
           break;
-        case 1: // À consommer
+        case 1:
           _filteredInventory = filtered.where((item) {
             if (item['expiry_date'] == null) return false;
             final expiry = DateTime.parse(item['expiry_date']);
             return expiry.difference(now).inDays <= 3 && expiry.isAfter(now);
           }).toList();
           break;
-        case 2: // Expirés
+        case 2:
           _filteredInventory = filtered.where((item) {
             if (item['expiry_date'] == null) return false;
             return DateTime.parse(item['expiry_date']).isBefore(now);
@@ -224,8 +222,6 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
           ),
         ],
       ),
-      // ❌ SUPPRIMÉ : Plus de FloatingActionButton pour ajouter des produits
-      // Les produits sont ajoutés UNIQUEMENT depuis le kiosk via vision
     );
   }
 
@@ -579,7 +575,6 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
               _buildDetailRow('Expiration', _formatExpiryDate(item['expiry_date'])),
             _buildDetailRow('Source', item['source'] ?? 'Manuel'),
             const SizedBox(height: 24),
-            // ✅ SEULE ACTION AUTORISÉE : Consommer
             Row(
               children: [
                 Expanded(

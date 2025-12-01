@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -8,9 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:vibration/vibration.dart';
 
-// ==========================================
-// HANDLER BACKGROUND (TOP-LEVEL FUNCTION)
-// ==========================================
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
@@ -38,13 +35,9 @@ class NotificationService {
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
 
-  // Préférences
   bool _vibrationEnabled = true;
   bool _soundEnabled = true;
 
-  // ==========================================
-  // INITIALISATION PRINCIPALE
-  // ==========================================
   Future<void> initialize() async {
     try {
       await _initializeFirebase();
@@ -53,32 +46,33 @@ class NotificationService {
       await _setupMessageHandlers();
       await _loadPreferences();
 
-      print('✅ NotificationService initialized');
+      if (kDebugMode) {
+        print('NotificationService initialized');
+      }
     } catch (e) {
-      print('❌ NotificationService init error: $e');
+      if (kDebugMode) {
+        print('NotificationService init error: $e');
+      }
     }
   }
 
-  // ==========================================
-  // FIREBASE
-  // ==========================================
   Future<void> _initializeFirebase() async {
     try {
       _fcmToken = await _firebaseMessaging.getToken();
       print('📱 FCM Token: $_fcmToken');
 
-      // Écouter les changements de token
       _firebaseMessaging.onTokenRefresh.listen((newToken) {
         _fcmToken = newToken;
         _saveFCMTokenToBackend(newToken);
       });
 
-      // Sauvegarder immédiatement
       if (_fcmToken != null) {
         await _saveFCMTokenToBackend(_fcmToken!);
       }
     } catch (e) {
-      print('❌ Firebase init error: $e');
+      if (kDebugMode) {
+        print('Firebase init error: $e');
+      }
     }
   }
 
@@ -91,15 +85,16 @@ class NotificationService {
       // final api = ClientApiService();
       // await api.saveFCMToken(token);
 
-      print('✅ FCM Token saved');
+      if (kDebugMode) {
+        print('FCM Token saved');
+      }
     } catch (e) {
-      print('❌ Error saving FCM token: $e');
+      if (kDebugMode) {
+        print('Error saving FCM token: $e');
+      }
     }
   }
 
-  // ==========================================
-  // NOTIFICATIONS LOCALES
-  // ==========================================
   Future<void> _initializeLocalNotifications() async {
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
@@ -118,7 +113,6 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
-    // Créer le canal Android
     if (Platform.isAndroid) {
       await _createAndroidChannel();
     }
@@ -140,9 +134,6 @@ class NotificationService {
         ?.createNotificationChannel(channel);
   }
 
-  // ==========================================
-  // PERMISSIONS
-  // ==========================================
   Future<void> _requestPermissions() async {
     if (Platform.isIOS) {
       final settings = await _firebaseMessaging.requestPermission(
@@ -151,7 +142,9 @@ class NotificationService {
         sound: true,
         provisional: false,
       );
-      print('iOS permission status: ${settings.authorizationStatus}');
+      if (kDebugMode) {
+        print('iOS permission status: ${settings.authorizationStatus}');
+      }
     }
 
     if (Platform.isAndroid && Platform.version.contains('13')) {
@@ -162,28 +155,23 @@ class NotificationService {
     }
   }
 
-  // ==========================================
-  // MESSAGE HANDLERS
-  // ==========================================
   Future<void> _setupMessageHandlers() async {
-    // App en foreground
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
-    // App en background (click)
     FirebaseMessaging.onMessageOpenedApp.listen(_handleBackgroundMessage);
 
-    // App fermée (click)
     final initialMessage = await _firebaseMessaging.getInitialMessage();
     if (initialMessage != null) {
       _handleBackgroundMessage(initialMessage);
     }
 
-    // Background handler global
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   }
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    print('📨 Foreground message: ${message.notification?.title}');
+    if (kDebugMode) {
+      print('Foreground message: ${message.notification?.title}');
+    }
 
     final notification = message.notification;
     final data = message.data;
@@ -199,19 +187,20 @@ class NotificationService {
   }
 
   Future<void> _handleBackgroundMessage(RemoteMessage message) async {
-    print('📨 Background message opened: ${message.notification?.title}');
+    if (kDebugMode) {
+      print('Background message opened: ${message.notification?.title}');
+    }
 
     final data = message.data;
 
     // TODO: Navigation
     if (data['action'] == 'open_alert') {
-      print('Navigate to alert: ${data['alert_id']}');
+      if (kDebugMode) {
+        print('Navigate to alert: ${data['alert_id']}');
+      }
     }
   }
 
-  // ==========================================
-  // AFFICHER NOTIFICATION
-  // ==========================================
   Future<void> showNotification({
     required String title,
     required String body,
@@ -225,15 +214,12 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.high,
 
-      // Vibration
       enableVibration: _vibrationEnabled,
       vibrationPattern: _vibrationEnabled ? Int64List.fromList([0, 500, 200, 500]) : null,
 
-      // Son
       playSound: _soundEnabled,
       sound: _soundEnabled ? const RawResourceAndroidNotificationSound('notification') : null,
 
-      // Apparence
       icon: '@mipmap/ic_launcher',
       color: _getColorForAlertType(alertType),
       styleInformation: BigTextStyleInformation(body),
@@ -263,15 +249,11 @@ class NotificationService {
       payload: payload,
     );
 
-    // Vibration additionnelle
     if (_vibrationEnabled && Platform.isAndroid) {
       await _triggerVibration();
     }
   }
 
-  // ==========================================
-  // VIBRATION
-  // ==========================================
   Future<void> _triggerVibration() async {
     try {
       final hasVibrator = await Vibration.hasVibrator();
@@ -279,7 +261,9 @@ class NotificationService {
         await Vibration.vibrate(pattern: [0, 500, 200, 500]);
       }
     } catch (e) {
-      print('Vibration error: $e');
+      if (kDebugMode) {
+        print('Vibration error: $e');
+      }
     }
   }
 
@@ -298,11 +282,10 @@ class NotificationService {
     }
   }
 
-  // ==========================================
-  // TAP NOTIFICATION
-  // ==========================================
   void _onNotificationTap(NotificationResponse response) {
-    print('👆 Notification tapped: ${response.payload}');
+    if (kDebugMode) {
+      print('👆 Notification tapped: ${response.payload}');
+    }
 
     // TODO: Navigation
     if (response.payload != null) {
@@ -310,9 +293,6 @@ class NotificationService {
     }
   }
 
-  // ==========================================
-  // NOTIFICATIONS PROGRAMMÉES
-  // ==========================================
   Future<void> scheduleNotification({
     required int id,
     required String title,
@@ -347,9 +327,6 @@ class NotificationService {
     );
   }
 
-  // ==========================================
-  // ANNULER
-  // ==========================================
   Future<void> cancelNotification(int id) async {
     await _localNotifications.cancel(id);
   }
@@ -358,9 +335,6 @@ class NotificationService {
     await _localNotifications.cancelAll();
   }
 
-  // ==========================================
-  // PRÉFÉRENCES
-  // ==========================================
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     _vibrationEnabled = prefs.getBool('notification_vibration') ?? true;

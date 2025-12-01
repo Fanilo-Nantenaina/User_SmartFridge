@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:user_smartfridge/main.dart';
-import 'package:user_smartfridge/service/api_service.dart';
+import 'package:user_smartfridge/service/api.dart';
 
 class RecipesPage extends StatefulWidget {
-  const RecipesPage({Key? key}) : super(key: key);
+  const RecipesPage({super.key});
 
   @override
   State<RecipesPage> createState() => _RecipesPageState();
@@ -507,14 +507,12 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
 
   Future<void> _generateShoppingList(Map<String, dynamic> recipe) async {
     try {
-      // Récupérer le premier frigo
       final fridges = await _api.getFridges();
       if (fridges.isEmpty) {
         _showError('Aucun frigo disponible');
         return;
       }
 
-      // Générer la liste de courses
       final result = await _api.generateShoppingList(
         fridgeId: fridges[0]['id'],
         recipeIds: [recipe['id']],
@@ -522,7 +520,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
 
       if (!mounted) return;
 
-      // Afficher un résumé
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -570,7 +567,7 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                // Naviguer vers la liste de courses (à implémenter)
+                // Naviguer vers la liste de courses
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF3B82F6),

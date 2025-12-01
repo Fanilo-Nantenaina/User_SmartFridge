@@ -1,15 +1,7 @@
-// ============================================================================
-// lib/services/realtime_service.dart - SERVICE TEMPS RÉEL REFACTORISÉ
-// ============================================================================
-// ✅ Écoute les événements temps réel via Server-Sent Events (SSE)
-// ✅ Notifie automatiquement l'UI des changements d'inventaire
-// ============================================================================
-
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-/// Types d'événements temps réel
 enum InventoryUpdateType {
   updated, // INVENTORY_UPDATED
   consumed, // ITEM_CONSUMED
@@ -17,7 +9,6 @@ enum InventoryUpdateType {
   expired, // ITEM_EXPIRED
 }
 
-/// Modèle d'événement temps réel
 class InventoryUpdateEvent {
   final InventoryUpdateType type;
   final String message;
@@ -75,7 +66,6 @@ class InventoryUpdateEvent {
   }
 }
 
-/// Service de connexion temps réel via SSE
 class RealtimeService {
   final String baseUrl;
   final String accessToken;
@@ -90,16 +80,6 @@ class RealtimeService {
     required this.fridgeId,
   });
 
-  /// Démarre l'écoute des événements temps réel
-  ///
-  /// Usage:
-  /// ```dart
-  /// final service = RealtimeService(...);
-  /// service.listenToInventoryUpdates().listen((event) {
-  ///   print('Événement reçu: ${event.type}');
-  ///   // Recharger l'inventaire
-  /// });
-  /// ```
   Stream<InventoryUpdateEvent> listenToInventoryUpdates() {
     _controller = StreamController<InventoryUpdateEvent>();
     _client = http.Client();
@@ -142,7 +122,6 @@ class RealtimeService {
             _controller?.addError(error);
           },
           onDone: () {
-            // Reconnexion automatique après 5 secondes
             Future.delayed(const Duration(seconds: 5), _startListening);
           },
         );
@@ -153,32 +132,28 @@ class RealtimeService {
       }
     } catch (e) {
       _controller?.addError(e);
-      // Reconnexion automatique après 5 secondes
       Future.delayed(const Duration(seconds: 5), _startListening);
     }
   }
 
-  /// Ferme la connexion temps réel
   void dispose() {
     _controller?.close();
     _client?.close();
   }
 }
 
-/// Extension pour faciliter l'intégration dans les widgets
 extension RealtimeServiceExtension on RealtimeService {
-  /// Version simplifiée pour les widgets
   Stream<void> onInventoryUpdate() {
     return listenToInventoryUpdates()
         .where((event) =>
     event.type == InventoryUpdateType.updated ||
         event.type == InventoryUpdateType.consumed)
-        .map((_) => null);
+        .map((_) {});
   }
 
   Stream<void> onAlertCreated() {
     return listenToInventoryUpdates()
         .where((event) => event.type == InventoryUpdateType.alert)
-        .map((_) => null);
+        .map((_) {});
   }
 }
