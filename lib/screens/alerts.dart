@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_smartfridge/main.dart';
+import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/service/api.dart';
 
 class AlertsPage extends StatefulWidget {
@@ -14,6 +17,7 @@ class _AlertsPageState extends State<AlertsPage> {
   List<dynamic> _alerts = [];
   bool _isLoading = true;
   String _filter = 'pending';
+  int? _selectedFridgeId;
 
   @override
   void initState() {
@@ -21,18 +25,55 @@ class _AlertsPageState extends State<AlertsPage> {
     _loadAlerts();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _checkAndReloadIfNeeded();
+  }
+
+  Future<void> _checkAndReloadIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedFridgeId = prefs.getInt('selected_fridge_id');
+
+    if (savedFridgeId != null && savedFridgeId != _selectedFridgeId && !_isLoading) {
+      _loadAlerts();
+    }
+  }
+
   Future<void> _loadAlerts() async {
     setState(() => _isLoading = true);
 
     try {
       final fridges = await _api.getFridges();
+
       if (fridges.isEmpty) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _alerts = [];
+          _selectedFridgeId = null;
+          _isLoading = false;
+        });
         return;
       }
 
+      // ✅ CORRECTION: Récupérer le frigo sélectionné depuis SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      int? savedFridgeId = prefs.getInt('selected_fridge_id');
+
+      // ✅ Vérifier que le frigo sauvegardé existe toujours
+      if (savedFridgeId != null && fridges.any((f) => f['id'] == savedFridgeId)) {
+        _selectedFridgeId = savedFridgeId;
+      } else {
+        // Sinon, utiliser le premier frigo et sauvegarder
+        _selectedFridgeId = fridges[0]['id'];
+        await prefs.setInt('selected_fridge_id', _selectedFridgeId!);
+      }
+
+      if (kDebugMode) {
+        print('🔔 AlertsPage: Loading alerts for fridge $_selectedFridgeId');
+      }
+
       final alerts = await _api.getAlerts(
-        fridges[0]['id'],
+        _selectedFridgeId!,
         status: _filter == 'all' ? null : _filter,
       );
 
@@ -40,7 +81,7 @@ class _AlertsPageState extends State<AlertsPage> {
         _alerts = alerts;
         _isLoading = false;
       });
-    }  catch (e) {
+    } catch (e) {
       setState(() => _isLoading = false);
 
       if (e.toString().contains('Non autorisé') || e.toString().contains('401')) {
@@ -58,6 +99,7 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   void _showError(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
@@ -66,7 +108,7 @@ class _AlertsPageState extends State<AlertsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
           _buildAppBar(),
@@ -74,6 +116,8 @@ class _AlertsPageState extends State<AlertsPage> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
+                : _selectedFridgeId == null
+                ? _buildNoFridgeState()
                 : _alerts.isEmpty
                 ? _buildEmptyState()
                 : _buildAlertsList(),
@@ -83,9 +127,52 @@ class _AlertsPageState extends State<AlertsPage> {
     );
   }
 
+  Widget _buildNoFridgeState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.kitchen_outlined,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Aucun frigo connecté',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Connectez un frigo depuis le tableau de bord\npour voir les alertes',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAppBar() {
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
       child: Row(
         children: [
@@ -93,27 +180,40 @@ class _AlertsPageState extends State<AlertsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Alertes',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B),
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '${_alerts.length} notification(s)',
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
-                    fontSize: 14,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      '${_alerts.length} notification(s)',
+                      style: TextStyle(
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                        fontSize: 14,
+                      ),
+                    ),
+                    if (_selectedFridgeId != null) ...[
+                      Text(
+                        ' • Frigo #$_selectedFridgeId',
+                        style: TextStyle(
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Color(0xFF64748B)),
+            icon: Icon(Icons.refresh, color: Theme.of(context).iconTheme.color),
             onPressed: _loadAlerts,
           ),
         ],
@@ -151,10 +251,14 @@ class _AlertsPageState extends State<AlertsPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF3B82F6) : Colors.white,
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFF3B82F6) : const Color(0xFFE2E8F0),
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.outline,
           ),
         ),
         child: Row(
@@ -163,15 +267,255 @@ class _AlertsPageState extends State<AlertsPage> {
             Icon(
               icon,
               size: 16,
-              color: isSelected ? Colors.white : const Color(0xFF64748B),
+              color: isSelected
+                  ? Theme.of(context).colorScheme.onPrimary
+                  : Theme.of(context).textTheme.bodyMedium?.color,
             ),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : const Color(0xFF64748B),
+                color: isSelected
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).textTheme.bodyMedium?.color,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                 fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAlertCard(Map<String, dynamic> alert) {
+    final type = alert['type'] ?? '';
+    final color = _getAlertColor(type);
+    final icon = _getAlertIcon(type);
+    final title = _getAlertTitle(type);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _showAlertDetails(alert),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: color, size: 24),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          color: color,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        alert['message'] ?? '',
+                        style: TextStyle(
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                          fontSize: 13,
+                          height: 1.4,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (alert['created_at'] != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time,
+                              size: 12,
+                              color: Theme.of(context).textTheme.bodySmall?.color,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatTime(alert['created_at']),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(context).textTheme.bodySmall?.color,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(alert['status']).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _getStatusText(alert['status']),
+                    style: TextStyle(
+                      color: _getStatusColor(alert['status']),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAlertDetails(Map<String, dynamic> alert) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outline,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _getAlertColor(alert['type']).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    _getAlertIcon(alert['type']),
+                    color: _getAlertColor(alert['type']),
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _getAlertTitle(alert['type']),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: _getAlertColor(alert['type']),
+                        ),
+                      ),
+                      if (alert['created_at'] != null)
+                        Text(
+                          _formatTime(alert['created_at']),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Text(
+              alert['message'] ?? '',
+              style: TextStyle(
+                fontSize: 15,
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+                height: 1.6,
+              ),
+            ),
+            const SizedBox(height: 32),
+            if (alert['status'] != 'resolved') ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    if (_selectedFridgeId == null) {
+                      _showError('Aucun frigo sélectionné');
+                      return;
+                    }
+                    try {
+                      await _api.updateAlertStatus(
+                        fridgeId: _selectedFridgeId!,
+                        alertId: alert['id'],
+                        status: 'resolved',
+                      );
+                      Navigator.pop(context);
+                      _showSuccess('Alerte résolue');
+                      _loadAlerts();
+                    } catch (e) {
+                      _showError('Erreur: $e');
+                    }
+                  },
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('Marquer comme résolue'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
+                label: const Text('Fermer'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Theme.of(context).textTheme.bodyMedium?.color,
+                  side: BorderSide(color: Theme.of(context).colorScheme.outline),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
             ),
           ],
@@ -190,7 +534,7 @@ class _AlertsPageState extends State<AlertsPage> {
             Container(
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -198,16 +542,16 @@ class _AlertsPageState extends State<AlertsPage> {
                     ? Icons.notifications_off_outlined
                     : Icons.check_circle_outline,
                 size: 64,
-                color: const Color(0xFF94A3B8),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 24),
             Text(
               _filter == 'pending' ? 'Aucune alerte' : 'Aucune alerte résolue',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B),
+                color: Theme.of(context).textTheme.bodyLarge?.color,
               ),
             ),
             const SizedBox(height: 8),
@@ -216,8 +560,8 @@ class _AlertsPageState extends State<AlertsPage> {
                   ? 'Tout va bien ! 👍\nVous n\'avez aucune alerte en attente'
                   : 'Vous n\'avez pas encore\nrésolu d\'alertes',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyMedium?.color,
                 height: 1.5,
               ),
             ),
@@ -228,7 +572,6 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Widget _buildAlertsList() {
-    // Group alerts by priority
     final criticalAlerts = _alerts.where((a) => a['type'] == 'EXPIRED').toList();
     final warningAlerts = _alerts.where((a) => a['type'] == 'EXPIRY_SOON').toList();
     final infoAlerts = _alerts.where((a) => !['EXPIRED', 'EXPIRY_SOON'].contains(a['type'])).toList();
@@ -273,10 +616,10 @@ class _AlertsPageState extends State<AlertsPage> {
           const SizedBox(width: 12),
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1E293B),
+              color: Theme.of(context).textTheme.bodyLarge?.color,
             ),
           ),
           const SizedBox(width: 8),
@@ -296,107 +639,6 @@ class _AlertsPageState extends State<AlertsPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildAlertCard(Map<String, dynamic> alert) {
-    final type = alert['type'] ?? '';
-    final color = _getAlertColor(type);
-    final icon = _getAlertIcon(type);
-    final title = _getAlertTitle(type);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => _showAlertDetails(alert),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: color, size: 24),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                          color: color,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        alert['message'] ?? '',
-                        style: const TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 13,
-                          height: 1.4,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (alert['created_at'] != null) ...[
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.access_time,
-                              size: 12,
-                              color: Color(0xFF94A3B8),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _formatTime(alert['created_at']),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF94A3B8),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _getStatusColor(alert['status']).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _getStatusText(alert['status']),
-                    style: TextStyle(
-                      color: _getStatusColor(alert['status']),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -480,139 +722,8 @@ class _AlertsPageState extends State<AlertsPage> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
-  void _showAlertDetails(Map<String, dynamic> alert) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE2E8F0),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: _getAlertColor(alert['type']).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    _getAlertIcon(alert['type']),
-                    color: _getAlertColor(alert['type']),
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _getAlertTitle(alert['type']),
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: _getAlertColor(alert['type']),
-                        ),
-                      ),
-                      if (alert['created_at'] != null)
-                        Text(
-                          _formatTime(alert['created_at']),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF94A3B8),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Text(
-              alert['message'] ?? '',
-              style: const TextStyle(
-                fontSize: 15,
-                color: Color(0xFF64748B),
-                height: 1.6,
-              ),
-            ),
-            const SizedBox(height: 32),
-            if (alert['status'] != 'resolved') ...[
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    try {
-                      // Appel API pour résoudre l'alerte
-                      await _api.updateAlertStatus(
-                        fridgeId: alert['fridge_id'],
-                        alertId: alert['id'],
-                        status: 'resolved',
-                      );
-                      Navigator.pop(context);
-                      _showSuccess('Alerte résolue');
-                      _loadAlerts();
-                    } catch (e) {
-                      _showError('Erreur: $e');
-                    }
-                  },
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: const Text('Marquer comme résolue'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
-                label: const Text('Fermer'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF64748B),
-                  side: const BorderSide(color: Color(0xFFE2E8F0)),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _showSuccess(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.green),
     );

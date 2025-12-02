@@ -58,10 +58,10 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Notifications'),
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).cardColor,
         elevation: 0,
       ),
       body: ListView(
@@ -185,7 +185,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -193,27 +193,27 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.info_outline,
+                      Icon(Icons.info_outline,
                           size: 20,
-                          color: Color(0xFF64748B)
+                          color: Theme.of(context).iconTheme.color
                       ),
                       const SizedBox(width: 8),
                       Text(
                         'À propos',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E293B),
+                          color: Theme.of(context).textTheme.bodyLarge?.color,
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Les notifications vous permettent de rester informé '
                         'de l\'état de votre frigo en temps réel.',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF64748B),
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
                       height: 1.5,
                     ),
                   ),
@@ -238,14 +238,14 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
           child: Row(
             children: [
-              Icon(icon, size: 20, color: const Color(0xFF64748B)),
+              Icon(icon, size: 20, color: Theme.of(context).iconTheme.color),
               const SizedBox(width: 8),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF64748B),
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
                   letterSpacing: 0.5,
                 ),
               ),
@@ -255,9 +255,9 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: Theme.of(context).colorScheme.outline),
           ),
           child: Column(children: children),
         ),
@@ -287,20 +287,20 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       ),
       title: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 15,
-          color: Color(0xFF1E293B),
+          color: Theme.of(context).textTheme.bodyLarge?.color,
         ),
       ),
       subtitle: Text(
         subtitle,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12,
-          color: Color(0xFF64748B),
+          color: Theme.of(context).textTheme.bodyMedium?.color,
         ),
       ),
-      activeColor: const Color(0xFF3B82F6),
+      activeColor: Theme.of(context).colorScheme.primary,
     );
   }
 
@@ -324,23 +324,23 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       ),
       title: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 15,
-          color: Color(0xFF1E293B),
+          color: Theme.of(context).textTheme.bodyLarge?.color,
         ),
       ),
       subtitle: Text(
         subtitle,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12,
-          color: Color(0xFF64748B),
+          color: Theme.of(context).textTheme.bodyMedium?.color,
         ),
       ),
-      trailing: const Icon(
+      trailing: Icon(
         Icons.arrow_forward_ios,
         size: 16,
-        color: Color(0xFF94A3B8),
+        color: Theme.of(context).iconTheme.color,
       ),
     );
   }

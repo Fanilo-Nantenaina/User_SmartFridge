@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/screens/search_inventory.dart';
+import 'package:user_smartfridge/screens/shopping_list.dart';
 import 'package:user_smartfridge/service/api.dart';
+import 'package:user_smartfridge/widgets/fridge_selector.dart';
 import '../main.dart';
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({Key? key}) : super(key: key);
+  const DashboardPage({super.key});
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -13,7 +17,7 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   final ClientApiService _api = ClientApiService();
   List<dynamic> _fridges = [];
-  Map<String, dynamic>? _selectedFridge;
+  int? _selectedFridgeId;
   Map<String, dynamic> _stats = {};
   bool _isLoading = true;
 
@@ -28,10 +32,19 @@ class _DashboardPageState extends State<DashboardPage> {
 
     try {
       final fridges = await _api.getFridges();
+
+      final prefs = await SharedPreferences.getInstance();
+      int? savedFridgeId = prefs.getInt('selected_fridge_id');
+
       setState(() {
         _fridges = fridges;
         if (fridges.isNotEmpty) {
-          _selectedFridge = fridges[0];
+          if (savedFridgeId != null && fridges.any((f) => f['id'] == savedFridgeId)) {
+            _selectedFridgeId = savedFridgeId;
+          } else {
+            _selectedFridgeId = fridges[0]['id'];
+            prefs.setInt('selected_fridge_id', _selectedFridgeId!);
+          }
           _loadStats();
         }
         _isLoading = false;
@@ -43,11 +56,11 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _loadStats() async {
-    if (_selectedFridge == null) return;
+    if (_selectedFridgeId == null) return;
 
     try {
-      final inventory = await _api.getInventory(_selectedFridge!['id']);
-      final alerts = await _api.getAlerts(_selectedFridge!['id'], status: 'pending');
+      final inventory = await _api.getInventory(_selectedFridgeId!);
+      final alerts = await _api.getAlerts(_selectedFridgeId!, status: 'pending');
 
       setState(() {
         _stats = {
@@ -63,6 +76,13 @@ class _DashboardPageState extends State<DashboardPage> {
     } catch (e) {
       _showError('Erreur de chargement');
     }
+  }
+
+  void _onFridgeChanged(int fridgeId) {
+    setState(() {
+      _selectedFridgeId = fridgeId;
+    });
+    _loadStats();
   }
 
   void _handleError(dynamic e) {
@@ -102,7 +122,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -132,34 +152,44 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildAppBar() {
     return SliverAppBar(
       floating: true,
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       elevation: 0,
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Bonjour 👋',
-            style: TextStyle(fontSize: 16, color: Color(0xFF64748B)),
+            style: TextStyle(
+              fontSize: 16,
+              color: Theme.of(context).textTheme.bodyMedium?.color,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             'Tableau de bord',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF1E293B),
             ),
           ),
         ],
       ),
       actions: [
+        if (_fridges.isNotEmpty) ...[
+          FridgeSelector(
+            fridges: _fridges,
+            selectedFridgeId: _selectedFridgeId,
+            onFridgeChanged: _onFridgeChanged,
+          ),
+          const SizedBox(width: 8),
+        ],
         Container(
           margin: const EdgeInsets.only(right: 8),
           child: IconButton.filled(
             icon: const Icon(Icons.qr_code_scanner),
             onPressed: _showPairingDialog,
             style: IconButton.styleFrom(
-              backgroundColor: const Color(0xFF3B82F6),
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -177,38 +207,43 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Container(
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+          ),
         ),
         child: Column(
           children: [
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.kitchen_outlined,
                 size: 64,
-                color: Color(0xFF94A3B8),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'Aucun frigo connecté',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B),
+                color: Theme.of(context).textTheme.bodyLarge?.color,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Entrez le code de votre kiosk\npour connecter votre premier frigo',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF64748B), height: 1.5),
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+                height: 1.5,
+              ),
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -218,13 +253,10 @@ class _DashboardPageState extends State<DashboardPage> {
                 icon: const Icon(Icons.link, size: 20),
                 label: const Text('Connecter un frigo'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6),
-                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  elevation: 0,
                 ),
               ),
             ),
@@ -235,20 +267,28 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildFridgeCard() {
+    final selectedFridge = _fridges.firstWhere(
+          (f) => f['id'] == _selectedFridgeId,
+      orElse: () => _fridges.first,
+    );
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF3B82F6), Color(0xFF2563EB)],
+            colors: [
+              Theme.of(context).colorScheme.primary,
+              Theme.of(context).colorScheme.primary.withOpacity(0.8),
+            ],
           ),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF3B82F6).withOpacity(0.3),
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -281,7 +321,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _selectedFridge?['name'] ?? 'Mon frigo',
+                        selectedFridge['name'] ?? 'Mon frigo',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -293,7 +333,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               ],
             ),
-            if (_selectedFridge?['location'] != null) ...[
+            if (selectedFridge['location'] != null) ...[
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -301,7 +341,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       color: Colors.white70, size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    _selectedFridge!['location'],
+                    selectedFridge['location'],
                     style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
                 ],
@@ -323,7 +363,7 @@ class _DashboardPageState extends State<DashboardPage> {
               'Articles',
               _stats['total_items']?.toString() ?? '0',
               Icons.inventory_2_outlined,
-              const Color(0xFF3B82F6),
+              Theme.of(context).colorScheme.primary,
             ),
           ),
           const SizedBox(width: 12),
@@ -353,9 +393,11 @@ class _DashboardPageState extends State<DashboardPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+        ),
       ),
       child: Column(
         children: [
@@ -379,9 +421,9 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
-              color: Color(0xFF64748B),
+              color: Theme.of(context).textTheme.bodyMedium?.color,
             ),
             textAlign: TextAlign.center,
           ),
@@ -396,12 +438,12 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Actions rapides',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1E293B),
+              color: Theme.of(context).textTheme.bodyLarge?.color,
             ),
           ),
           const SizedBox(height: 12),
@@ -412,7 +454,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   'Rechercher',
                   'Commande vocale',
                   Icons.mic_outlined,
-                  const Color(0xFF3B82F6),
+                  Theme.of(context).colorScheme.primary,
                       () {
                     Navigator.push(
                       context,
@@ -430,7 +472,14 @@ class _DashboardPageState extends State<DashboardPage> {
                   'Voir les recettes',
                   Icons.restaurant_menu_outlined,
                   const Color(0xFF8B5CF6),
-                      () {},
+                      () {
+                    // Naviguer vers l'onglet Recettes
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (context) => const HomePage(initialIndex: 2),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -438,13 +487,21 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 12),
           Row(
             children: [
+              // ✅ NOUVEAU: Action directe vers les listes
               Expanded(
                 child: _buildActionCard(
                   'Courses',
-                  'Créer une liste',
+                  'Mes listes',
                   Icons.shopping_cart_outlined,
                   const Color(0xFF10B981),
-                      () {},
+                      () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ShoppingListsPage(),
+                      ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 12),
@@ -455,7 +512,12 @@ class _DashboardPageState extends State<DashboardPage> {
                   Icons.notifications_outlined,
                   const Color(0xFFF59E0B),
                       () {
-                    // Navigation vers AlertsPage
+                    // Naviguer vers l'onglet Alertes
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (context) => const HomePage(initialIndex: 4),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -474,9 +536,11 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -492,18 +556,18 @@ class _DashboardPageState extends State<DashboardPage> {
             const SizedBox(height: 12),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
-                color: Color(0xFF1E293B),
+                color: Theme.of(context).textTheme.bodyLarge?.color,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               subtitle,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
-                color: Color(0xFF64748B),
+                color: Theme.of(context).textTheme.bodyMedium?.color,
               ),
             ),
           ],
@@ -529,10 +593,13 @@ class _DashboardPageState extends State<DashboardPage> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF3B82F6).withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.link, color: Color(0xFF3B82F6)),
+                child: Icon(
+                  Icons.link,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
               ),
               const SizedBox(width: 12),
               const Expanded(
@@ -551,34 +618,37 @@ class _DashboardPageState extends State<DashboardPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Column(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.info_outline,
-                              size: 16, color: Color(0xFF64748B)),
-                          SizedBox(width: 8),
+                          Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                          const SizedBox(width: 8),
                           Text(
                             'Comment ça marche ?',
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF1E293B),
+                              color: Theme.of(context).textTheme.bodyLarge?.color,
                             ),
                           ),
                         ],
                       ),
-                      SizedBox(height: 8),
+                      const SizedBox(height: 8),
                       Text(
                         '1. Regardez le code à 6 chiffres sur le kiosk\n'
                             '2. Entrez-le ci-dessous\n'
                             '3. Personnalisez le nom de votre frigo',
                         style: TextStyle(
                           fontSize: 13,
-                          color: Color(0xFF64748B),
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
                           height: 1.4,
                         ),
                       ),
@@ -594,8 +664,6 @@ class _DashboardPageState extends State<DashboardPage> {
                     prefixIcon: const Icon(Icons.pin),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12)),
-                    filled: true,
-                    fillColor: Colors.white,
                   ),
                   keyboardType: TextInputType.number,
                   maxLength: 6,
@@ -610,8 +678,6 @@ class _DashboardPageState extends State<DashboardPage> {
                     prefixIcon: const Icon(Icons.kitchen_outlined),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12)),
-                    filled: true,
-                    fillColor: Colors.white,
                   ),
                   enabled: !isProcessing,
                 ),
@@ -624,8 +690,6 @@ class _DashboardPageState extends State<DashboardPage> {
                     prefixIcon: const Icon(Icons.location_on_outlined),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12)),
-                    filled: true,
-                    fillColor: Colors.white,
                   ),
                   enabled: !isProcessing,
                 ),
@@ -699,7 +763,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF1F5F9),
+                              color: Theme.of(context).colorScheme.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Column(
@@ -726,9 +790,6 @@ class _DashboardPageState extends State<DashboardPage> {
                             _loadData();
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF3B82F6),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
                             minimumSize: const Size(double.infinity, 48),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -756,9 +817,6 @@ class _DashboardPageState extends State<DashboardPage> {
                   : const Icon(Icons.link),
               label: Text(isProcessing ? 'Connexion...' : 'Connecter'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3B82F6),
-                foregroundColor: Colors.white,
-                elevation: 0,
                 minimumSize: const Size(120, 48),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -774,22 +832,22 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: const Color(0xFF64748B)),
+        Icon(icon, size: 16, color: Theme.of(context).textTheme.bodyMedium?.color),
         const SizedBox(width: 8),
         Text(
           '$label: ',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
-            color: Color(0xFF64748B),
+            color: Theme.of(context).textTheme.bodyMedium?.color,
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF1E293B),
+              color: Theme.of(context).textTheme.bodyLarge?.color,
             ),
           ),
         ),
