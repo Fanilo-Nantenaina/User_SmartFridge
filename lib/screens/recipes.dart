@@ -19,7 +19,7 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
   List<dynamic> _allRecipes = [];
   List<dynamic> _feasibleRecipes = [];
   List<dynamic> _favoriteRecipes = [];
-  Set<int> _favoriteRecipeIds = {}; // ✅ Pour un accès rapide
+  Set<int> _favoriteRecipeIds = {};
 
   bool _isLoading = true;
   bool _isDiscovering = false;
@@ -36,21 +36,35 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _checkAndReloadIfNeeded();
+    // Vérifier après un court délai pour laisser le temps aux prefs de se mettre à jour
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) _checkAndReloadIfNeeded();
+    });
   }
 
   Future<void> _checkAndReloadIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
     final savedFridgeId = prefs.getInt('selected_fridge_id');
 
-    if (savedFridgeId != null && savedFridgeId != _selectedFridgeId && !_isLoading) {
+    if (kDebugMode) {
+      print('🔄 RecipesPage: Checking fridge - saved=$savedFridgeId, current=$_selectedFridgeId');
+    }
+
+    // Recharger si le frigo a changé OU si on n'a pas encore de frigo sélectionné
+    if (savedFridgeId != _selectedFridgeId) {
+      if (kDebugMode) {
+        print('🔄 RecipesPage: Fridge changed! Reloading...');
+      }
       _loadRecipes();
     }
   }
 
+  void refresh() {
+    _loadRecipes();
+  }
+
   Future<void> _saveSuggestedRecipe(Map<String, dynamic> suggestion) async {
     try {
-      // Afficher un indicateur de chargement
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -74,11 +88,8 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       await _api.saveSuggestedRecipe(suggestion);
 
       if (!mounted) return;
-
-      // Fermer l'indicateur de chargement
       Navigator.pop(context);
 
-      // Afficher le succès
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -139,10 +150,10 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
             ),
             ElevatedButton.icon(
               onPressed: () {
-                Navigator.pop(context); // Fermer le dialog
-                Navigator.pop(context); // Fermer la suggestion
-                _loadRecipes(); // Recharger les recettes
-                _tabController.animateTo(1); // Aller à l'onglet "Toutes"
+                Navigator.pop(context);
+                Navigator.pop(context);
+                _loadRecipes();
+                _tabController.animateTo(1);
               },
               icon: const Icon(Icons.visibility),
               label: const Text('Voir'),
@@ -153,10 +164,7 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       );
     } catch (e) {
       if (!mounted) return;
-
-      // Fermer l'indicateur de chargement si encore ouvert
       Navigator.pop(context);
-
       _showError('Erreur lors de la sauvegarde: $e');
     }
   }
@@ -167,29 +175,23 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     super.dispose();
   }
 
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkAndReloadIfNeeded();
+    }
+  }
+
   Future<void> _loadRecipes() async {
+    if (!mounted) return;
+
     setState(() => _isLoading = true);
 
     try {
       final fridges = await _api.getFridges();
-
-      // Charger toutes les recettes et favoris en parallèle
-      final results = await Future.wait([
-        _api.getRecipes(),
-        _api.getFavoriteRecipes(),
-      ]);
-
-      final allRecipes = results[0];
-      final favoriteRecipes = results[1];
-
-      // ✅ Construire le Set d'IDs de favoris
-      final favoriteIds = favoriteRecipes.map((r) => r['id'] as int).toSet();
-
       final prefs = await SharedPreferences.getInstance();
       int? savedFridgeId = prefs.getInt('selected_fridge_id');
 
-      List<dynamic> feasible = [];
-
+      // Déterminer le frigo actif
       if (fridges.isNotEmpty) {
         if (savedFridgeId != null && fridges.any((f) => f['id'] == savedFridgeId)) {
           _selectedFridgeId = savedFridgeId;
@@ -197,24 +199,54 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
           _selectedFridgeId = fridges[0]['id'];
           await prefs.setInt('selected_fridge_id', _selectedFridgeId!);
         }
-
-        if (kDebugMode) {
-          print('🍳 RecipesPage: Loading recipes for fridge $_selectedFridgeId');
-        }
-
-        feasible = await _api.getFeasibleRecipes(_selectedFridgeId!);
       } else {
         _selectedFridgeId = null;
       }
 
+      if (kDebugMode) {
+        print('🍳 RecipesPage: Loading recipes for fridge $_selectedFridgeId');
+      }
+
+      List<dynamic> allRecipes = [];
+      List<dynamic> feasibleRecipes = [];
+      List<dynamic> favoriteRecipes = [];
+
+      if (_selectedFridgeId != null) {
+        // ✅ Charger en parallèle UNIQUEMENT pour le frigo sélectionné
+        final results = await Future.wait([
+          _api.getRecipes(),
+          _api.getFeasibleRecipes(_selectedFridgeId!),  // Spécifique au frigo
+          _api.getFavoriteRecipes(),
+        ]);
+
+        allRecipes = results[0];
+        feasibleRecipes = results[1];
+        favoriteRecipes = results[2];
+      } else {
+        // Pas de frigo : charger seulement les recettes globales
+        final results = await Future.wait([
+          _api.getRecipes(),
+          _api.getFavoriteRecipes(),
+        ]);
+
+        allRecipes = results[0];
+        favoriteRecipes = results[1];
+        feasibleRecipes = [];  // ✅ Vide si pas de frigo
+      }
+
+      final favoriteIds = favoriteRecipes.map((r) => r['id'] as int).toSet();
+
+      if (!mounted) return;
+
       setState(() {
         _allRecipes = allRecipes;
-        _feasibleRecipes = feasible;
+        _feasibleRecipes = feasibleRecipes;
         _favoriteRecipes = favoriteRecipes;
         _favoriteRecipeIds = favoriteIds;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
 
       if (e.toString().contains('Non autorisé') || e.toString().contains('401')) {
@@ -231,7 +263,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     }
   }
 
-  // ✅ MÉTHODE DE DÉCOUVERTE IA
   Future<void> _discoverRecipe() async {
     if (_selectedFridgeId == null) {
       _showError('Aucun frigo sélectionné. Connectez un frigo depuis le tableau de bord.');
@@ -266,12 +297,10 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     }
   }
 
-  // ✅ TOGGLE FAVORI
   Future<void> _toggleFavorite(Map<String, dynamic> recipe) async {
     final recipeId = recipe['id'] as int;
     final isFavorite = _favoriteRecipeIds.contains(recipeId);
 
-    // Optimistic update
     setState(() {
       if (isFavorite) {
         _favoriteRecipeIds.remove(recipeId);
@@ -291,7 +320,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
         _showSuccess('Ajouté aux favoris');
       }
     } catch (e) {
-      // Rollback en cas d'erreur
       setState(() {
         if (isFavorite) {
           _favoriteRecipeIds.add(recipeId);
@@ -305,7 +333,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     }
   }
 
-  // ✅ GÉNÉRATION DE LISTE DE COURSES
   Future<void> _generateShoppingListFromSuggestion(Map<String, dynamic> suggestion) async {
     if (_selectedFridgeId == null) {
       _showError('Aucun frigo sélectionné');
@@ -313,6 +340,36 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     }
 
     try {
+      // ✅ ÉTAPE 1 : Sauvegarder la recette d'abord pour obtenir son ID
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Création de la liste...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Sauvegarder la recette
+      final savedRecipe = await _api.saveSuggestedRecipe(suggestion);
+      final recipeId = savedRecipe['id'] as int;
+
+      if (kDebugMode) {
+        print('✅ Recette sauvegardée avec ID: $recipeId');
+      }
+
+      // ✅ ÉTAPE 2 : Créer la liste de courses AVEC le recipe_id
       final missingIngredients = (suggestion['missing_ingredients'] as List? ?? [])
           .map<Map<String, dynamic>>((e) {
         if (e is Map<String, dynamic>) {
@@ -324,13 +381,26 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       final result = await _api.generateShoppingListFromIngredients(
         fridgeId: _selectedFridgeId!,
         ingredients: missingIngredients,
+        recipeId: recipeId,  // ✅ NOUVEAU : Passer le recipe_id
       );
 
-      _showSuccess('Liste de courses créée avec ${(result['items'] as List?)?.length ?? 0} article(s)');
+      if (!mounted) return;
+      Navigator.pop(context); // Fermer le loading
+
+      final itemsCount = (result['items'] as List?)?.length ?? 0;
+
+      _showSuccess('Liste créée avec $itemsCount article(s) !');
+
+      // Recharger les recettes pour mettre à jour les statuts
+      _loadRecipes();
+
     } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
       _showError('Erreur: $e');
     }
   }
+
 
   Future<void> _generateShoppingList(Map<String, dynamic> recipe) async {
     if (_selectedFridgeId == null) {
@@ -437,7 +507,7 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'recipes_shopping_fab', // ✅ Tag unique
+        heroTag: 'recipes_shopping_fab',
         onPressed: () {
           Navigator.push(
             context,
@@ -508,7 +578,7 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                         ),
                       ),
                     ] else ...[
-                      Text(
+                      const Text(
                         ' • Aucun frigo',
                         style: TextStyle(
                           color: Colors.orange,
@@ -894,93 +964,108 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                 ],
               ),
             ),
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, -5),
-                  ),
-                ],
-              ),
-              child: SafeArea(
-                child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _saveSuggestedRecipe(suggestion),
-                          icon: const Icon(Icons.bookmark_add),
-                          label: const Text('Sauvegarder'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, -5),
                           ),
+                        ],
+                      ),
+                      child: SafeArea(
+                        child: Row(
+                          children: [
+                            // ✅ Bouton "Sauvegarder" seulement
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  _saveSuggestedRecipe(suggestion);
+                                },
+                                icon: const Icon(Icons.bookmark_add),
+                                label: const Text('Sauvegarder'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // ✅ Bouton "Autre idée"
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  _discoverRecipe();
+                                },
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('Autre idée'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            // ✅ Bouton principal : Liste de courses OU Je cuisine
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  Navigator.pop(context);
+
+                                  final hasMissingIngredients =
+                                      (suggestion['missing_ingredients'] as List?)?.isNotEmpty == true;
+
+                                  if (hasMissingIngredients) {
+                                    // ✅ NOUVEAU FLUX : Sauvegarder la recette + créer liste liée
+                                    await _generateShoppingListFromSuggestion(suggestion);
+
+                                    // Naviguer vers les listes de courses
+                                    if (mounted) {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => const ShoppingListsPage(),
+                                        ),
+                                      );
+                                    }
+                                  } else {
+                                    // Pas d'ingrédients manquants : juste sauvegarder
+                                    await _saveSuggestedRecipe(suggestion);
+                                    _showSuccess('Recette sauvegardée ! Bon appétit ! 🍽️');
+                                  }
+                                },
+                                icon: Icon(
+                                  (suggestion['missing_ingredients'] as List?)?.isNotEmpty == true
+                                      ? Icons.shopping_cart_outlined
+                                      : Icons.restaurant,
+                                ),
+                                label: Text(
+                                  (suggestion['missing_ingredients'] as List?)?.isNotEmpty == true
+                                      ? 'Créer liste'
+                                      : 'Je cuisine !',
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                Expanded(
-                child: OutlinedButton.icon(
-                onPressed: () {
-              Navigator.pop(context);
-              _discoverRecipe();
-              },
-                icon: const Icon(Icons.refresh),
-                label: const Text('Autre idée'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-                child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      if (suggestion['missing_ingredients'] != null &&
-                          (suggestion['missing_ingredients'] as List).isNotEmpty) {
-                        _generateShoppingListFromSuggestion(suggestion).then((_) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const ShoppingListsPage(),
-                            ),
-                          );
-                        });
-                      } else {
-                        _showSuccess('Bon appétit ! 🍽️');
-                      }
-                    },
-                    icon: Icon(
-                      (suggestion['missing_ingredients'] as List?)?.isNotEmpty == true
-                          ? Icons.shopping_cart_outlined
-                          : Icons.restaurant,
                     ),
-                  label: Text(
-                    (suggestion['missing_ingredients'] as List?)?.isNotEmpty == true
-                        ? 'Liste de courses'
-                        : 'Je cuisine !',
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-            ),
-                    ],
-                ),
-              ),
-            ),
                   ],
               ),
             ),
@@ -988,30 +1073,64 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     );
   }
 
-  // ✅ RECIPE CARD avec gestion des favoris
+  // Dans recipes.dart - Remplacez _buildRecipeCard par cette version corrigée :
+
   Widget _buildRecipeCard(
       Map<String, dynamic> recipe, {
         bool? canMake,
         double? matchPercentage,
         List<dynamic>? missingIngredients,
+        String? shoppingListStatus,
+        int? shoppingListId,
+        bool? ingredientsComplete,
+        double? combinedPercentage,
+        int? purchasedMissingCount,
+        int? totalMissingCount,
       }) {
     final recipeId = recipe['id'] as int;
     final isFavorite = _favoriteRecipeIds.contains(recipeId);
+
+    // ✅ LOGIQUE CORRIGÉE : Déterminer le statut global
+    // - isComplete si tout est dans le frigo (canMake)
+    // - OU si ingredientsComplete est true (frigo + courses complétées)
+    // - OU si la liste de courses est "completed"
+    final bool isComplete = canMake == true ||
+        ingredientsComplete == true ||
+        shoppingListStatus == 'completed';
+
+    // ✅ Pourcentage à afficher
+    final double displayPercentage = isComplete
+        ? 100.0
+        : (combinedPercentage ?? matchPercentage ?? 0);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Theme.of(context).colorScheme.outline),
+        border: Border.all(
+          color: isComplete
+              ? const Color(0xFF10B981)
+              : Theme.of(context).colorScheme.outline,
+          width: isComplete ? 2 : 1,
+        ),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () => _showRecipeDetails(recipe, missingIngredients: missingIngredients),
+          onTap: () => _showRecipeDetails(
+            recipe,
+            missingIngredients: missingIngredients,
+            shoppingListStatus: shoppingListStatus,
+            shoppingListId: shoppingListId,
+            ingredientsComplete: isComplete,  // ✅ Passer le statut calculé
+            combinedPercentage: displayPercentage,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header avec image
               Stack(
                 children: [
                   Container(
@@ -1020,7 +1139,12 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [
+                        colors: isComplete
+                            ? [
+                          const Color(0xFF10B981),
+                          const Color(0xFF059669),
+                        ]
+                            : [
                           Theme.of(context).colorScheme.primary.withOpacity(0.8),
                           Theme.of(context).colorScheme.secondary.withOpacity(0.8),
                         ],
@@ -1029,13 +1153,14 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                     ),
                     child: Center(
                       child: Icon(
-                        Icons.restaurant,
+                        isComplete ? Icons.check_circle_outline : Icons.restaurant,
                         size: 64,
                         color: Colors.white.withOpacity(0.5),
                       ),
                     ),
                   ),
-                  // ✅ BOUTON FAVORI
+
+                  // Badge favori
                   Positioned(
                     top: 12,
                     right: 12,
@@ -1055,39 +1180,53 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                       ),
                     ),
                   ),
-                  if (canMake != null)
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: canMake ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              canMake ? Icons.check_circle : Icons.info,
-                              color: Colors.white,
-                              size: 14,
+
+                  // ✅ Badge principal - Adapté selon le statut
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isComplete
+                            ? const Color(0xFF10B981)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isComplete ? Icons.check_circle : Icons.pie_chart,
+                            color: isComplete ? Colors.white : Theme.of(context).colorScheme.primary,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            isComplete
+                                ? 'Ingrédients complets !'
+                                : '${displayPercentage.toInt()}% prêt',
+                            style: TextStyle(
+                              color: isComplete ? Colors.white : Theme.of(context).colorScheme.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              canMake ? 'Réalisable' : 'Incomplet',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
+                  ),
                 ],
               ),
+
+              // Contenu
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -1101,6 +1240,7 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                         color: Theme.of(context).textTheme.bodyLarge?.color,
                       ),
                     ),
+
                     if (recipe['description'] != null) ...[
                       const SizedBox(height: 8),
                       Text(
@@ -1114,67 +1254,92 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
+
                     const SizedBox(height: 12),
+
+                    // Infos temps / difficulté
                     Row(
                       children: [
                         if (recipe['preparation_time'] != null) ...[
-                          _buildInfoChip(
-                            Icons.schedule_outlined,
-                            '${recipe['preparation_time']} min',
-                          ),
+                          _buildInfoChip(Icons.schedule_outlined, '${recipe['preparation_time']} min'),
                           const SizedBox(width: 8),
                         ],
                         if (recipe['difficulty'] != null)
                           _buildInfoChip(Icons.signal_cellular_alt, recipe['difficulty']),
-                        const Spacer(),
-                        if (matchPercentage != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.check_circle_outline,
-                                  size: 14,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${matchPercentage.toInt()}%',
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.primary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                       ],
                     ),
-                    if (missingIngredients != null && missingIngredients.isNotEmpty) ...[
+
+                    // ✅ Barre de progression (seulement si pas complet)
+                    if (!isComplete) ...[
+                      const SizedBox(height: 16),
+                      _buildCombinedProgressBar(
+                        fridgePercentage: matchPercentage ?? 0,
+                        combinedPercentage: displayPercentage,
+                        purchasedCount: purchasedMissingCount ?? 0,
+                        totalMissing: totalMissingCount ?? 0,
+                      ),
+                    ],
+
+                    // ✅ Message "Ingrédients complets" avec contexte
+                    if (isComplete) ...[
                       const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFEF3C7),
+                          color: const Color(0xFFD1FAE5),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
                           children: [
-                            const Icon(
-                              Icons.shopping_cart_outlined,
-                              color: Color(0xFFF59E0B),
-                              size: 16,
+                            const Icon(Icons.celebration, color: Color(0xFF059669), size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                // ✅ Message adapté selon la source
+                                canMake == true
+                                    ? 'Tout est dans votre frigo !'
+                                    : shoppingListStatus == 'completed'
+                                    ? 'Frigo + courses = prêt à cuisiner !'
+                                    : 'Tous les ingrédients sont disponibles !',
+                                style: const TextStyle(
+                                  color: Color(0xFF065F46),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // ✅ Statut des courses (si pas complet ET liste existe)
+                    if (!isComplete && shoppingListStatus != null) ...[
+                      const SizedBox(height: 10),
+                      _buildShoppingListStatusChip(shoppingListStatus),
+                    ],
+
+                    // ✅ Ingrédients manquants (si pas complet ET pas de liste OU liste non complète)
+                    if (!isComplete &&
+                        missingIngredients != null &&
+                        missingIngredients.isNotEmpty &&
+                        shoppingListStatus != 'completed') ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.shopping_basket_outlined, color: Color(0xFFF59E0B), size: 16),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                '${missingIngredients.length} ingrédient(s) manquant(s)',
+                                shoppingListStatus == 'in_progress'
+                                    ? '${(totalMissingCount ?? 0) - (purchasedMissingCount ?? 0)} article(s) restant(s)'
+                                    : '${missingIngredients.length} ingrédient(s) à acheter',
                                 style: const TextStyle(
                                   color: Color(0xFFF59E0B),
                                   fontSize: 12,
@@ -1195,6 +1360,153 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       ),
     );
   }
+
+  Widget _buildCombinedProgressBar({
+    required double fridgePercentage,
+    required double combinedPercentage,
+    required int purchasedCount,
+    required int totalMissing,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Barre de progression
+        Stack(
+          children: [
+            // Fond
+            Container(
+              height: 8,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            // Progression combinée (frigo + courses)
+            FractionallySizedBox(
+              widthFactor: combinedPercentage / 100,
+              child: Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Theme.of(context).colorScheme.primary,
+                      const Color(0xFF10B981),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            // Séparateur (limite frigo)
+            if (fridgePercentage < combinedPercentage)
+              Positioned(
+                left: (fridgePercentage / 100) * MediaQuery.of(context).size.width * 0.85,
+                child: Container(
+                  width: 2,
+                  height: 8,
+                  color: Colors.white,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        // Légende
+        Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '${fridgePercentage.toInt()}% frigo',
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).textTheme.bodySmall?.color,
+              ),
+            ),
+            if (purchasedCount > 0) ...[
+              const SizedBox(width: 12),
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '+$purchasedCount acheté(s)',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildShoppingListStatusChip(String status) {
+    Color backgroundColor;
+    Color textColor;
+    IconData icon;
+    String message;
+
+    switch (status) {
+      case 'completed':
+        backgroundColor = const Color(0xFFD1FAE5);
+        textColor = const Color(0xFF065F46);
+        icon = Icons.check_circle;
+        message = '✓ Courses terminées';
+        break;
+      case 'in_progress':
+        backgroundColor = const Color(0xFFDBEAFE);
+        textColor = const Color(0xFF1E40AF);
+        icon = Icons.shopping_cart;
+        message = 'Courses en cours...';
+        break;
+      case 'pending':
+        backgroundColor = const Color(0xFFE0E7FF);
+        textColor = const Color(0xFF3730A3);
+        icon = Icons.list_alt;
+        message = 'Liste de courses créée';
+        break;
+      default:
+        return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: textColor, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            message,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInfoChip(IconData icon, String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1219,9 +1531,22 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       ),
     );
   }
-// ✅ DÉTAILS DE RECETTE avec favori
-  void _showRecipeDetails(Map<String, dynamic> recipe, {List<dynamic>? missingIngredients}) {
+
+  // Remplacez la signature de _showRecipeDetails par celle-ci :
+
+  void _showRecipeDetails(
+      Map<String, dynamic> recipe, {
+        List<dynamic>? missingIngredients,
+        String? shoppingListStatus,
+        int? shoppingListId,
+        bool? ingredientsComplete,      // ✅ AJOUTÉ
+        double? combinedPercentage,     // ✅ AJOUTÉ
+      }) {
     final recipeId = recipe['id'] as int;
+
+    // ✅ Utiliser les nouveaux paramètres pour afficher le statut
+    final bool isComplete = ingredientsComplete == true;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1241,6 +1566,7 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
               ),
               child: Column(
                 children: [
+                  // Header
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -1268,7 +1594,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                                 ),
                               ),
                             ),
-                            // ✅ BOUTON FAVORI DANS LE DIALOG
                             IconButton(
                               icon: Icon(
                                 isFavorite ? Icons.favorite : Icons.favorite_border,
@@ -1276,7 +1601,7 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                               ),
                               onPressed: () {
                                 _toggleFavorite(recipe);
-                                setModalState(() {}); // Update dialog UI
+                                setModalState(() {});
                               },
                             ),
                           ],
@@ -1284,11 +1609,75 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                       ],
                     ),
                   ),
+
+                  // Contenu scrollable
                   Expanded(
                     child: ListView(
                       controller: scrollController,
                       padding: const EdgeInsets.all(24),
                       children: [
+                        // ✅ NOUVEAU : Badge "Ingrédients complets"
+                        if (isComplete) ...[
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD1FAE5),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.celebration, color: Color(0xFF10B981), size: 24),
+                                ),
+                                const SizedBox(width: 16),
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Prêt à cuisiner !',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color: Color(0xFF065F46),
+                                        ),
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        'Tous les ingrédients sont disponibles',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Color(0xFF065F46),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+
+                        // ✅ SECTION 1 : Statut de la liste de courses
+                        if (shoppingListStatus != null && !isComplete) ...[
+                          _buildShoppingStatusSection(shoppingListStatus),
+                          const SizedBox(height: 20),
+                        ],
+
+                        // ✅ SECTION 2 : Ingrédients manquants (seulement si pas complet)
+                        if (!isComplete && missingIngredients != null && missingIngredients.isNotEmpty) ...[
+                          _buildMissingIngredientsSection(missingIngredients),
+                          const SizedBox(height: 20),
+                        ],
+
+                        // Description
                         if (recipe['description'] != null) ...[
                           Text(
                             'Description',
@@ -1309,6 +1698,8 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                           ),
                           const SizedBox(height: 24),
                         ],
+
+                        // Instructions
                         Text(
                           'Instructions',
                           style: TextStyle(
@@ -1326,56 +1717,13 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                             height: 1.6,
                           ),
                         ),
-                        if (missingIngredients != null && missingIngredients.isNotEmpty) ...[
-                          const SizedBox(height: 24),
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFEF3C7),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Row(
-                                  children: [
-                                    Icon(
-                                      Icons.shopping_cart_outlined,
-                                      color: Color(0xFFF59E0B),
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Ingrédients manquants',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFFF59E0B),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                ...missingIngredients.map(
-                                      (ing) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 4),
-                                    child: Text(
-                                      '• ${ing['product_name']}',
-                                      style: const TextStyle(
-                                        color: Color(0xFFF59E0B),
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
+
+                  // Footer avec boutons
                   Container(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: Theme.of(context).cardColor,
                       boxShadow: [
@@ -1387,21 +1735,90 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                       ],
                     ),
                     child: SafeArea(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _generateShoppingList(recipe);
-                        },
-                        icon: const Icon(Icons.shopping_cart_outlined),
-                        label: const Text('Générer liste de courses'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          minimumSize: const Size(double.infinity, 0),
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
+                      child: Row(
+                        children: [
+                          // ✅ Bouton adapté selon le statut
+                          if (isComplete) ...[
+                            // Recette complète : bouton "Je cuisine"
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  _showSuccess('Bon appétit ! 🍳');
+                                },
+                                icon: const Icon(Icons.restaurant),
+                                label: const Text('Je cuisine !'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF10B981),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ] else if (missingIngredients != null && missingIngredients.isNotEmpty) ...[
+                            // Ingrédients manquants : bouton liste de courses
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: shoppingListStatus != null
+                                    ? () {
+                                  Navigator.pop(context);
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const ShoppingListsPage(),
+                                    ),
+                                  );
+                                }
+                                    : () {
+                                  Navigator.pop(context);
+                                  _generateShoppingList(recipe);
+                                },
+                                icon: Icon(
+                                  shoppingListStatus != null
+                                      ? Icons.visibility
+                                      : Icons.add_shopping_cart,
+                                ),
+                                label: Text(
+                                  shoppingListStatus != null
+                                      ? 'Voir la liste'
+                                      : 'Créer liste de courses',
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ] else ...[
+                            // Cas par défaut
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  _showSuccess('Bon appétit ! 🍳');
+                                },
+                                icon: const Icon(Icons.restaurant),
+                                label: const Text('Je cuisine !'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF10B981),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),
@@ -1413,7 +1830,191 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       ),
     );
   }
+
+  Widget _buildShoppingStatusSection(String status) {
+    Color backgroundColor;
+    Color borderColor;
+    Color textColor;
+    IconData icon;
+    String title;
+    String subtitle;
+
+    switch (status) {
+      case 'completed':
+        backgroundColor = const Color(0xFFD1FAE5);
+        borderColor = const Color(0xFF10B981);
+        textColor = const Color(0xFF065F46);
+        icon = Icons.check_circle;
+        title = 'Courses terminées !';
+        subtitle = 'Vous avez acheté tous les ingrédients manquants';
+        break;
+      case 'in_progress':
+        backgroundColor = const Color(0xFFDBEAFE);
+        borderColor = const Color(0xFF3B82F6);
+        textColor = const Color(0xFF1E40AF);
+        icon = Icons.shopping_cart;
+        title = 'Courses en cours';
+        subtitle = 'Certains articles ont déjà été achetés';
+        break;
+      case 'pending':
+        backgroundColor = const Color(0xFFE0E7FF);
+        borderColor = const Color(0xFF6366F1);
+        textColor = const Color(0xFF3730A3);
+        icon = Icons.list_alt;
+        title = 'Liste de courses créée';
+        subtitle = 'Les articles sont prêts à être achetés';
+        break;
+      default:
+        return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: borderColor.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: borderColor, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: textColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: textColor.withOpacity(0.8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildMissingIngredientsSection(List<dynamic> missingIngredients) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.kitchen,
+                  color: Color(0xFFF59E0B),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Pas dans le frigo',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFB45309),
+                        fontSize: 15,
+                      ),
+                    ),
+                    Text(
+                      '${missingIngredients.length} ingrédient(s) non détecté(s)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: const Color(0xFFB45309).withOpacity(0.8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(color: Color(0xFFF59E0B), height: 1),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: missingIngredients.take(6).map((ing) {
+              final name = ing['product_name'] ?? ing['name'] ?? 'Ingrédient';
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.5)),
+                ),
+                child: Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFFB45309),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          if (missingIngredients.length > 6) ...[
+            const SizedBox(height: 8),
+            Text(
+              '+ ${missingIngredients.length - 6} autre(s)',
+              style: TextStyle(
+                fontSize: 12,
+                color: const Color(0xFFB45309).withOpacity(0.7),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildFeasibleRecipes() {
+    if (_selectedFridgeId == null) {
+      return _buildEmptyState(
+        Icons.kitchen_outlined,
+        'Aucun frigo sélectionné',
+        'Sélectionnez un frigo depuis le tableau de bord\npour voir les recettes réalisables',
+      );
+    }
+
     if (_feasibleRecipes.isEmpty) {
       return _buildEmptyState(
         Icons.restaurant_menu_outlined,
@@ -1429,19 +2030,67 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
         itemCount: _feasibleRecipes.length,
         itemBuilder: (context, index) {
           final item = _feasibleRecipes[index];
-          final recipe = item['recipe'];
-          final canMake = item['can_make'] ?? false;
-          final matchPercentage = (item['match_percentage'] ?? 0.0).toDouble();
+
+          // ✅ DEBUG : Afficher la structure des données
+          if (kDebugMode && index == 0) {
+            print('🔍 Structure item: ${item.keys.toList()}');
+            print('🔍 recipe type: ${item['recipe'].runtimeType}');
+            print('🔍 can_make: ${item['can_make']}');
+            print('🔍 match_percentage: ${item['match_percentage']}');
+            print('🔍 shopping_list_status: ${item['shopping_list_status']}');
+            print('🔍 ingredients_complete: ${item['ingredients_complete']}');
+            print('🔍 combined_percentage: ${item['combined_percentage']}');
+          }
+
+          // ✅ Le backend retourne "recipe" comme objet imbriqué
+          final recipe = item['recipe'] as Map<String, dynamic>;
+
+          // Données de faisabilité
+          final canMake = item['can_make'] as bool? ?? false;
+          final matchPercentage = _toDouble(item['match_percentage']);
+          final missingIngredients = item['missing_ingredients'] as List<dynamic>? ?? [];
+
+          // Infos liste de courses
+          final shoppingListStatus = item['shopping_list_status'] as String?;
+          final shoppingListId = item['shopping_list_id'] as int?;
+
+          // Statut combiné - ✅ avec valeurs par défaut correctes
+          final ingredientsComplete = item['ingredients_complete'] as bool? ?? canMake;
+          final combinedPercentage = _toDouble(item['combined_percentage']) > 0
+              ? _toDouble(item['combined_percentage'])
+              : matchPercentage;
+          final purchasedMissingCount = item['purchased_missing_count'] as int? ?? 0;
+          final totalMissingCount = item['total_missing_count'] as int? ?? missingIngredients.length;
+
+          if (kDebugMode) {
+            print('📊 ${recipe['title']}: complete=$ingredientsComplete, combined=$combinedPercentage%, status=$shoppingListStatus');
+          }
+
           return _buildRecipeCard(
             recipe,
             canMake: canMake,
             matchPercentage: matchPercentage,
-            missingIngredients: item['missing_ingredients'] ?? [],
+            missingIngredients: missingIngredients,
+            shoppingListStatus: shoppingListStatus,
+            shoppingListId: shoppingListId,
+            ingredientsComplete: ingredientsComplete,
+            combinedPercentage: combinedPercentage,
+            purchasedMissingCount: purchasedMissingCount,
+            totalMissingCount: totalMissingCount,
           );
         },
       ),
     );
   }
+
+  double _toDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
   Widget _buildAllRecipes() {
     if (_allRecipes.isEmpty) {
       return _buildEmptyState(
@@ -1455,10 +2104,12 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _allRecipes.length,
-        itemBuilder: (context, index) => _buildRecipeCard(_allRecipes[index]),
+        itemBuilder: (context, index) => _buildSimpleRecipeCard(_allRecipes[index]),
       ),
     );
   }
+
+
   Widget _buildFavoriteRecipes() {
     if (_favoriteRecipes.isEmpty) {
       return _buildEmptyState(
@@ -1472,10 +2123,127 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _favoriteRecipes.length,
-        itemBuilder: (context, index) => _buildRecipeCard(_favoriteRecipes[index]),
+        itemBuilder: (context, index) => _buildSimpleRecipeCard(_favoriteRecipes[index]),
       ),
     );
   }
+
+
+  Widget _buildSimpleRecipeCard(Map<String, dynamic> recipe) {
+    final recipeId = recipe['id'] as int;
+    final isFavorite = _favoriteRecipeIds.contains(recipeId);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => _showRecipeDetails(recipe),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header avec image
+              Stack(
+                children: [
+                  Container(
+                    height: 150,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Theme.of(context).colorScheme.primary.withOpacity(0.8),
+                          Theme.of(context).colorScheme.secondary.withOpacity(0.8),
+                        ],
+                      ),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.restaurant,
+                        size: 48,
+                        color: Colors.white.withOpacity(0.5),
+                      ),
+                    ),
+                  ),
+                  // Badge favori
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: InkWell(
+                      onTap: () => _toggleFavorite(recipe),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor.withOpacity(0.9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isFavorite ? Icons.favorite : Icons.favorite_border,
+                          color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              // Contenu
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      recipe['title'] ?? 'Recette',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                    if (recipe['description'] != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        recipe['description'],
+                        style: TextStyle(
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                          fontSize: 14,
+                          height: 1.4,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    // Infos temps / difficulté
+                    Row(
+                      children: [
+                        if (recipe['preparation_time'] != null) ...[
+                          _buildInfoChip(Icons.schedule_outlined, '${recipe['preparation_time']} min'),
+                          const SizedBox(width: 8),
+                        ],
+                        if (recipe['difficulty'] != null)
+                          _buildInfoChip(Icons.signal_cellular_alt, recipe['difficulty']),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
   Widget _buildEmptyState(IconData icon, String title, String subtitle) {
     return Center(
       child: Padding(

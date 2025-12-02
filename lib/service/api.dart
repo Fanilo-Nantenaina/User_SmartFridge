@@ -357,8 +357,21 @@ class ClientApiService {
     throw Exception('Échec de génération');
   }
 
-  Future<Map<String, dynamic>> generateShoppingListFromIngredients({required int fridgeId, required List<Map<String, dynamic>> ingredients}) async {
-    final body = {'fridge_id': fridgeId, 'ingredients': ingredients};
+  Future<Map<String, dynamic>> generateShoppingListFromIngredients({
+    required int fridgeId,
+    required List<Map<String, dynamic>> ingredients,
+    int? recipeId,  // ✅ NOUVEAU paramètre
+  }) async {
+    final body = {
+      'fridge_id': fridgeId,
+      'ingredients': ingredients,
+    };
+
+    // ✅ Ajouter recipe_id si fourni
+    if (recipeId != null) {
+      body['recipe_id'] = recipeId;
+    }
+
     final response = await _makeAuthenticatedRequest((headers) => http.post(
       Uri.parse('$baseUrl/shopping-lists/generate-from-ingredients'),
       headers: headers,
@@ -522,6 +535,80 @@ class ClientApiService {
 
     if (response.statusCode == 201) return json.decode(response.body);
     throw Exception('Échec de génération');
+  }
+
+  // Dans api.dart - Remplacez la méthode createShoppingListWithItems
+
+  /// Crée une liste de courses avec des articles (existants ou personnalisés)
+  Future<Map<String, dynamic>> createShoppingListWithItems({
+    required int fridgeId,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    // Construire les items au format attendu par l'API
+    final formattedItems = items.map((item) {
+      final Map<String, dynamic> formattedItem = {
+        'quantity': (item['quantity'] as num).toDouble(),
+        'unit': item['unit'] ?? 'pièce',
+      };
+
+      // ✅ Si c'est un produit existant (sélectionné), envoyer product_id
+      if (item['product_id'] != null) {
+        formattedItem['product_id'] = item['product_id'];
+      }
+      // ✅ Si c'est un produit personnalisé (saisie libre), envoyer product_name
+      else if (item['custom_name'] != null || item['product_name'] != null) {
+        formattedItem['product_name'] = item['custom_name'] ?? item['product_name'];
+      }
+
+      return formattedItem;
+    }).toList();
+
+    print('📤 Sending to API: fridge_id=$fridgeId, items=$formattedItems');
+
+    final response = await _makeAuthenticatedRequest((headers) =>
+        http.post(
+          Uri.parse('$baseUrl/shopping-lists'),
+          headers: headers,
+          body: json.encode({
+            'fridge_id': fridgeId,
+            'items': formattedItems,
+          }),
+        ).timeout(timeout)
+    );
+
+    print('📥 Response: ${response.statusCode} - ${response.body}');
+
+    if (response.statusCode == 201) {
+      return json.decode(response.body);
+    }
+
+    // Afficher l'erreur détaillée
+    final error = json.decode(response.body);
+    throw Exception(error['detail'] ?? 'Échec de création: ${response.statusCode}');
+  }
+
+  Future<void> addItemToShoppingListWithName({
+    required int listId,
+    required String productName,
+    required double quantity,
+    required String unit,
+  }) async {
+    final response = await _makeAuthenticatedRequest((headers) =>
+        http.post(
+          Uri.parse('$baseUrl/shopping-lists/$listId/items'),
+          headers: headers,
+          body: json.encode({
+            'product_name': productName,
+            'quantity': quantity,
+            'unit': unit,
+          }),
+        ).timeout(timeout)
+    );
+
+    if (response.statusCode != 201) {
+      final error = json.decode(response.body);
+      throw Exception(error['detail'] ?? 'Échec d\'ajout');
+    }
   }
 }
 
