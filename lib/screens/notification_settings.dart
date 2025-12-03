@@ -6,7 +6,8 @@ class NotificationSettingsPage extends StatefulWidget {
   const NotificationSettingsPage({super.key});
 
   @override
-  State<NotificationSettingsPage> createState() => _NotificationSettingsPageState();
+  State<NotificationSettingsPage> createState() =>
+      _NotificationSettingsPageState();
 }
 
 class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
@@ -52,9 +53,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -193,9 +192,10 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.info_outline,
-                          size: 20,
-                          color: Theme.of(context).iconTheme.color
+                      Icon(
+                        Icons.info_outline,
+                        size: 20,
+                        color: Theme.of(context).iconTheme.color,
                       ),
                       const SizedBox(width: 8),
                       Text(
@@ -210,7 +210,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                   const SizedBox(height: 8),
                   Text(
                     'Les notifications vous permettent de rester informé '
-                        'de l\'état de votre frigo en temps réel.',
+                    'de l\'état de votre frigo en temps réel.',
                     style: TextStyle(
                       fontSize: 13,
                       color: Theme.of(context).textTheme.bodyMedium?.color,

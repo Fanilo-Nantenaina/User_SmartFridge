@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:user_smartfridge/main.dart';
 import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/service/api.dart';
 
@@ -35,7 +34,9 @@ class _AlertsPageState extends State<AlertsPage> {
     final prefs = await SharedPreferences.getInstance();
     final savedFridgeId = prefs.getInt('selected_fridge_id');
 
-    if (savedFridgeId != null && savedFridgeId != _selectedFridgeId && !_isLoading) {
+    if (savedFridgeId != null &&
+        savedFridgeId != _selectedFridgeId &&
+        !_isLoading) {
       _loadAlerts();
     }
   }
@@ -55,15 +56,13 @@ class _AlertsPageState extends State<AlertsPage> {
         return;
       }
 
-      // ✅ CORRECTION: Récupérer le frigo sélectionné depuis SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       int? savedFridgeId = prefs.getInt('selected_fridge_id');
 
-      // ✅ Vérifier que le frigo sauvegardé existe toujours
-      if (savedFridgeId != null && fridges.any((f) => f['id'] == savedFridgeId)) {
+      if (savedFridgeId != null &&
+          fridges.any((f) => f['id'] == savedFridgeId)) {
         _selectedFridgeId = savedFridgeId;
       } else {
-        // Sinon, utiliser le premier frigo et sauvegarder
         _selectedFridgeId = fridges[0]['id'];
         await prefs.setInt('selected_fridge_id', _selectedFridgeId!);
       }
@@ -84,12 +83,13 @@ class _AlertsPageState extends State<AlertsPage> {
     } catch (e) {
       setState(() => _isLoading = false);
 
-      if (e.toString().contains('Non autorisé') || e.toString().contains('401')) {
+      if (e.toString().contains('Non autorisé') ||
+          e.toString().contains('401')) {
         await _api.logout();
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => const LoginPage()),
-                (route) => false,
+            (route) => false,
           );
         }
       } else {
@@ -232,7 +232,11 @@ class _AlertsPageState extends State<AlertsPage> {
             const SizedBox(width: 8),
             _buildFilterChip('Toutes', 'all', Icons.list_alt),
             const SizedBox(width: 8),
-            _buildFilterChip('Résolues', 'resolved', Icons.check_circle_outline),
+            _buildFilterChip(
+              'Résolues',
+              'resolved',
+              Icons.check_circle_outline,
+            ),
           ],
         ),
       ),
@@ -349,14 +353,18 @@ class _AlertsPageState extends State<AlertsPage> {
                             Icon(
                               Icons.access_time,
                               size: 12,
-                              color: Theme.of(context).textTheme.bodySmall?.color,
+                              color: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.color,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               _formatTime(alert['created_at']),
                               style: TextStyle(
                                 fontSize: 11,
-                                color: Theme.of(context).textTheme.bodySmall?.color,
+                                color: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.color,
                               ),
                             ),
                           ],
@@ -367,7 +375,10 @@ class _AlertsPageState extends State<AlertsPage> {
                 ),
                 const SizedBox(width: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: _getStatusColor(alert['status']).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
@@ -509,8 +520,12 @@ class _AlertsPageState extends State<AlertsPage> {
                 icon: const Icon(Icons.close),
                 label: const Text('Fermer'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Theme.of(context).textTheme.bodyMedium?.color,
-                  side: BorderSide(color: Theme.of(context).colorScheme.outline),
+                  foregroundColor: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.color,
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -572,9 +587,15 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Widget _buildAlertsList() {
-    final criticalAlerts = _alerts.where((a) => a['type'] == 'EXPIRED').toList();
-    final warningAlerts = _alerts.where((a) => a['type'] == 'EXPIRY_SOON').toList();
-    final infoAlerts = _alerts.where((a) => !['EXPIRED', 'EXPIRY_SOON'].contains(a['type'])).toList();
+    final criticalAlerts = _alerts
+        .where((a) => a['type'] == 'EXPIRED')
+        .toList();
+    final warningAlerts = _alerts
+        .where((a) => a['type'] == 'EXPIRY_SOON')
+        .toList();
+    final infoAlerts = _alerts
+        .where((a) => !['EXPIRED', 'EXPIRY_SOON'].contains(a['type']))
+        .toList();
 
     return RefreshIndicator(
       onRefresh: _loadAlerts,
@@ -582,17 +603,29 @@ class _AlertsPageState extends State<AlertsPage> {
         padding: const EdgeInsets.all(16),
         children: [
           if (criticalAlerts.isNotEmpty) ...[
-            _buildSectionHeader('Critique', criticalAlerts.length, const Color(0xFFEF4444)),
+            _buildSectionHeader(
+              'Critique',
+              criticalAlerts.length,
+              const Color(0xFFEF4444),
+            ),
             ...criticalAlerts.map((alert) => _buildAlertCard(alert)),
             const SizedBox(height: 16),
           ],
           if (warningAlerts.isNotEmpty) ...[
-            _buildSectionHeader('Avertissement', warningAlerts.length, const Color(0xFFF59E0B)),
+            _buildSectionHeader(
+              'Avertissement',
+              warningAlerts.length,
+              const Color(0xFFF59E0B),
+            ),
             ...warningAlerts.map((alert) => _buildAlertCard(alert)),
             const SizedBox(height: 16),
           ],
           if (infoAlerts.isNotEmpty) ...[
-            _buildSectionHeader('Information', infoAlerts.length, const Color(0xFF3B82F6)),
+            _buildSectionHeader(
+              'Information',
+              infoAlerts.length,
+              const Color(0xFF3B82F6),
+            ),
             ...infoAlerts.map((alert) => _buildAlertCard(alert)),
           ],
         ],

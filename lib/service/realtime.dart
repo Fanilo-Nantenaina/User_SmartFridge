@@ -3,14 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-enum InventoryUpdateType {
-  updated,
-  consumed,
-  alert,
-  expired,
-  added,
-  removed,
-}
+enum InventoryUpdateType { updated, consumed, alert, expired, added, removed }
 
 class InventoryUpdateEvent {
   final InventoryUpdateType type;
@@ -32,7 +25,9 @@ class InventoryUpdateEvent {
 
     return InventoryUpdateEvent(
       type: type,
-      message: json['message']?.toString() ?? _generateMessage(type, json['payload']),
+      message:
+          json['message']?.toString() ??
+          _generateMessage(type, json['payload']),
       payload: (json['payload'] is Map<String, dynamic>)
           ? json['payload']
           : <String, dynamic>{},
@@ -65,8 +60,9 @@ class InventoryUpdateEvent {
   }
 
   static String _generateMessage(InventoryUpdateType type, dynamic payload) {
-    final Map<String, dynamic> safePayload =
-    (payload is Map<String, dynamic>) ? payload : {};
+    final Map<String, dynamic> safePayload = (payload is Map<String, dynamic>)
+        ? payload
+        : {};
 
     final productName = safePayload['product_name']?.toString() ?? 'Un produit';
     final quantity = safePayload['quantity']?.toString() ?? '';
@@ -152,7 +148,8 @@ class RealtimeService {
         return;
       }
 
-      if (kDebugMode) print('🔄 Starting SSE connection for fridge $fridgeId...');
+      if (kDebugMode)
+        print('🔄 Starting SSE connection for fridge $fridgeId...');
 
       final request = http.Request(
         'GET',
@@ -175,59 +172,66 @@ class RealtimeService {
             .transform(const LineSplitter())
             .listen(
               (line) {
-            if (!_isActive) return;
+                if (!_isActive) return;
 
-            if (line.startsWith('data:')) {
-              try {
-                final jsonStr = line.substring(5).trim();
-                if (jsonStr.isEmpty) return;
+                if (line.startsWith('data:')) {
+                  try {
+                    final jsonStr = line.substring(5).trim();
+                    if (jsonStr.isEmpty) return;
 
-                final json = jsonDecode(jsonStr);
+                    final json = jsonDecode(jsonStr);
 
-                // ✅ CORRECTION: Vérification que json est une Map valide
-                if (json is! Map<String, dynamic>) {
-                  if (kDebugMode) print('⚠️ Invalid JSON structure: $json');
-                  return;
+                    // ✅ CORRECTION: Vérification que json est une Map valide
+                    if (json is! Map<String, dynamic>) {
+                      if (kDebugMode) print('⚠️ Invalid JSON structure: $json');
+                      return;
+                    }
+
+                    final event = InventoryUpdateEvent.fromJson(json);
+
+                    if (_controller != null && !_controller!.isClosed) {
+                      _controller!.add(event);
+                    }
+
+                    if (kDebugMode)
+                      print(
+                        '📨 Event received: ${event.type} - ${event.message}',
+                      );
+                  } catch (e, stackTrace) {
+                    // ✅ CORRECTION: Ne pas crasher sur erreur de parsing
+                    if (kDebugMode) {
+                      print('⚠️ Error parsing event: $e');
+                      print('Line was: $line');
+                      print('Stack: $stackTrace');
+                    }
+                    // Ne pas propager l'erreur - continuer à écouter
+                  }
                 }
-
-                final event = InventoryUpdateEvent.fromJson(json);
-
+              },
+              onError: (error) {
+                if (kDebugMode) print('❌ SSE stream error: $error');
                 if (_controller != null && !_controller!.isClosed) {
-                  _controller!.add(event);
+                  _controller!.addError(error);
                 }
-
-                if (kDebugMode) print('📨 Event received: ${event.type} - ${event.message}');
-              } catch (e, stackTrace) {
-                // ✅ CORRECTION: Ne pas crasher sur erreur de parsing
-                if (kDebugMode) {
-                  print('⚠️ Error parsing event: $e');
-                  print('Line was: $line');
-                  print('Stack: $stackTrace');
-                }
-                // Ne pas propager l'erreur - continuer à écouter
-              }
-            }
-          },
-          onError: (error) {
-            if (kDebugMode) print('❌ SSE stream error: $error');
-            if (_controller != null && !_controller!.isClosed) {
-              _controller!.addError(error);
-            }
-            _scheduleReconnect();
-          },
-          onDone: () {
-            if (kDebugMode) print('⚠️ SSE stream closed');
-            _scheduleReconnect();
-          },
-          cancelOnError: false,
-        );
+                _scheduleReconnect();
+              },
+              onDone: () {
+                if (kDebugMode) print('⚠️ SSE stream closed');
+                _scheduleReconnect();
+              },
+              cancelOnError: false,
+            );
       } else if (response.statusCode == 401) {
-        if (kDebugMode) print('🔄 SSE 401 - Token expired, will retry with fresh token');
+        if (kDebugMode)
+          print('🔄 SSE 401 - Token expired, will retry with fresh token');
         _scheduleReconnect();
       } else {
-        if (kDebugMode) print('❌ SSE connection failed: ${response.statusCode}');
+        if (kDebugMode)
+          print('❌ SSE connection failed: ${response.statusCode}');
         if (_controller != null && !_controller!.isClosed) {
-          _controller!.addError(Exception('Failed to connect: ${response.statusCode}'));
+          _controller!.addError(
+            Exception('Failed to connect: ${response.statusCode}'),
+          );
         }
         _scheduleReconnect();
       }
@@ -248,17 +252,24 @@ class RealtimeService {
     if (_reconnectAttempts > _maxReconnectAttempts) {
       if (kDebugMode) print('❌ Max reconnect attempts reached, stopping SSE');
       if (_controller != null && !_controller!.isClosed) {
-        _controller!.addError(Exception('Connexion impossible après $_maxReconnectAttempts tentatives'));
+        _controller!.addError(
+          Exception(
+            'Connexion impossible après $_maxReconnectAttempts tentatives',
+          ),
+        );
       }
       return;
     }
 
     final baseDelay = _baseReconnectDelay.inSeconds * _reconnectAttempts;
-    final jitter = (baseDelay * 0.2 * (DateTime.now().millisecond / 1000)).round();
+    final jitter = (baseDelay * 0.2 * (DateTime.now().millisecond / 1000))
+        .round();
     final delay = Duration(seconds: (baseDelay + jitter).clamp(3, 60));
 
     if (kDebugMode) {
-      print('🔄 Reconnecting SSE in ${delay.inSeconds}s (attempt $_reconnectAttempts/$_maxReconnectAttempts)...');
+      print(
+        '🔄 Reconnecting SSE in ${delay.inSeconds}s (attempt $_reconnectAttempts/$_maxReconnectAttempts)...',
+      );
     }
 
     Future.delayed(delay, () {
@@ -289,15 +300,18 @@ class RealtimeService {
 
 extension RealtimeServiceExtension on RealtimeService {
   Stream<InventoryUpdateEvent> onInventoryChange() {
-    return listenToInventoryUpdates().where((event) =>
-    event.type == InventoryUpdateType.updated ||
-        event.type == InventoryUpdateType.consumed ||
-        event.type == InventoryUpdateType.added ||
-        event.type == InventoryUpdateType.removed);
+    return listenToInventoryUpdates().where(
+      (event) =>
+          event.type == InventoryUpdateType.updated ||
+          event.type == InventoryUpdateType.consumed ||
+          event.type == InventoryUpdateType.added ||
+          event.type == InventoryUpdateType.removed,
+    );
   }
 
   Stream<InventoryUpdateEvent> onAlertCreated() {
-    return listenToInventoryUpdates()
-        .where((event) => event.type == InventoryUpdateType.alert);
+    return listenToInventoryUpdates().where(
+      (event) => event.type == InventoryUpdateType.alert,
+    );
   }
 }

@@ -99,7 +99,7 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
 
     try {
       final product = _allProducts.firstWhere(
-            (p) => p['id'] == productId,
+        (p) => p['id'] == productId,
         orElse: () => null,
       );
       return product?['name'] ?? 'Produit #$productId';
@@ -133,7 +133,7 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
       String category = '';
       try {
         final product = _allProducts.firstWhere(
-              (p) => p['id'] == productId,
+          (p) => p['id'] == productId,
           orElse: () => null,
         );
         category = (product?['category'] ?? '').toLowerCase();
@@ -141,12 +141,15 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
         // Ignore
       }
 
-      final matches = productName.contains(normalizedQuery) ||
+      final matches =
+          productName.contains(normalizedQuery) ||
           category.contains(normalizedQuery) ||
           _fuzzyMatch(productName, normalizedQuery);
 
       if (kDebugMode && matches) {
-        print('Match found: $productName (${item['quantity']} ${item['unit']})');
+        print(
+          'Match found: $productName (${item['quantity']} ${item['unit']})',
+        );
       }
 
       return matches;
@@ -160,8 +163,10 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
       if (nameA.startsWith(normalizedQuery)) return -1;
       if (nameB.startsWith(normalizedQuery)) return 1;
 
-      if (nameA.contains(normalizedQuery) && !nameB.contains(normalizedQuery)) return -1;
-      if (!nameA.contains(normalizedQuery) && nameB.contains(normalizedQuery)) return 1;
+      if (nameA.contains(normalizedQuery) && !nameB.contains(normalizedQuery))
+        return -1;
+      if (!nameA.contains(normalizedQuery) && nameB.contains(normalizedQuery))
+        return 1;
 
       return 0;
     });
@@ -179,10 +184,31 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
 
   String _normalizeQuery(String query) {
     final stopWords = [
-      'combien', 'reste', 'il', 'de', 'me', 'ai', 'je',
-      'dans', 'mon', 'le', 'la', 'les', 'un', 'une', 'des',
-      'frigo', 'réfrigérateur', 'congélateur',
-      'y', 'a', 't', 'il', 'est', 'ce', 'que',
+      'combien',
+      'reste',
+      'il',
+      'de',
+      'me',
+      'ai',
+      'je',
+      'dans',
+      'mon',
+      'le',
+      'la',
+      'les',
+      'un',
+      'une',
+      'des',
+      'frigo',
+      'réfrigérateur',
+      'congélateur',
+      'y',
+      'a',
+      't',
+      'il',
+      'est',
+      'ce',
+      'que',
     ];
 
     var normalized = query;
@@ -345,30 +371,45 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
                   onChanged: _performSearch,
                   decoration: InputDecoration(
                     hintText: 'Ex: Combien d\'œufs ?',
-                    prefixIcon: Icon(Icons.search, color: Theme.of(context).iconTheme.color),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: Theme.of(context).iconTheme.color,
+                    ),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
-                      icon: Icon(Icons.clear, color: Theme.of(context).iconTheme.color),
-                      onPressed: () {
-                        _searchController.clear();
-                        _performSearch('');
-                      },
-                    )
+                            icon: Icon(
+                              Icons.clear,
+                              color: Theme.of(context).iconTheme.color,
+                            ),
+                            onPressed: () {
+                              _searchController.clear();
+                              _performSearch('');
+                            },
+                          )
                         : null,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
+                      borderSide: BorderSide(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
+                      borderSide: BorderSide(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
+                      borderSide: BorderSide(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 2,
+                      ),
                     ),
                     filled: true,
-                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    fillColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
@@ -376,19 +417,29 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
               const SizedBox(width: 12),
 
               ScaleTransition(
-                scale: _isListening ? _pulseAnimation : const AlwaysStoppedAnimation(1.0),
+                scale: _isListening
+                    ? _pulseAnimation
+                    : const AlwaysStoppedAnimation(1.0),
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: _isListening
                           ? [Colors.red.shade400, Colors.red.shade600]
-                          : [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.primary.withOpacity(0.8)],
+                          : [
+                              Theme.of(context).colorScheme.primary,
+                              Theme.of(
+                                context,
+                              ).colorScheme.primary.withOpacity(0.8),
+                            ],
                     ),
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: (_isListening ? Colors.red : Theme.of(context).colorScheme.primary)
-                            .withOpacity(0.3),
+                        color:
+                            (_isListening
+                                    ? Colors.red
+                                    : Theme.of(context).colorScheme.primary)
+                                .withOpacity(0.3),
                         blurRadius: 10,
                         spreadRadius: 2,
                       ),
@@ -456,7 +507,9 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.red.shade700),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Colors.red.shade700,
+                      ),
                     ),
                   ),
                 ],
@@ -483,7 +536,9 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: Theme.of(context).colorScheme.primary.withOpacity(0.3)),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+        ),
       ),
     );
   }
@@ -496,7 +551,7 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
     String category = '';
     try {
       final product = _allProducts.firstWhere(
-            (p) => p['id'] == item['product_id'],
+        (p) => p['id'] == item['product_id'],
         orElse: () => null,
       );
       category = product?['category'] ?? '';
@@ -559,7 +614,12 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.primary.withOpacity(0.8)],
+                          colors: [
+                            Theme.of(context).colorScheme.primary,
+                            Theme.of(
+                              context,
+                            ).colorScheme.primary.withOpacity(0.8),
+                          ],
                         ),
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -579,7 +639,9 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Theme.of(context).textTheme.bodyLarge?.color,
+                              color: Theme.of(
+                                context,
+                              ).textTheme.bodyLarge?.color,
                             ),
                           ),
                           if (category.isNotEmpty) ...[
@@ -588,7 +650,9 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
                               category,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Theme.of(context).textTheme.bodyMedium?.color,
+                                color: Theme.of(
+                                  context,
+                                ).textTheme.bodyMedium?.color,
                               ),
                             ),
                           ],
@@ -596,7 +660,10 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.volume_up, color: Theme.of(context).colorScheme.primary),
+                      icon: Icon(
+                        Icons.volume_up,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                       onPressed: () => _announceResult(item),
                       tooltip: 'Lire à voix haute',
                     ),
@@ -606,7 +673,9 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -640,7 +709,10 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
                 if (expiryDate != null) ...[
                   const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: statusColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
@@ -661,10 +733,7 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
                         const SizedBox(width: 8),
                         Text(
                           '• ${_formatDate(expiryDate)}',
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 13,
-                          ),
+                          style: TextStyle(color: statusColor, fontSize: 13),
                         ),
                       ],
                     ),
@@ -690,7 +759,8 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _filteredResults.length,
-      itemBuilder: (context, index) => _buildResultCard(_filteredResults[index]),
+      itemBuilder: (context, index) =>
+          _buildResultCard(_filteredResults[index]),
     );
   }
 
@@ -707,11 +777,7 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
                 color: const Color(0xFFF1F5F9),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                Icons.search,
-                size: 64,
-                color: Colors.grey.shade400,
-              ),
+              child: Icon(Icons.search, size: 64, color: Colors.grey.shade400),
             ),
             const SizedBox(height: 24),
             Text(
@@ -726,10 +792,7 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
             Text(
               'Tapez ou parlez pour rechercher un produit',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey.shade500,
-                height: 1.5,
-              ),
+              style: TextStyle(color: Colors.grey.shade500, height: 1.5),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -739,7 +802,10 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF3B82F6),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 16,
+                ),
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -785,7 +851,10 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF3B82F6),
                 side: const BorderSide(color: Color(0xFF3B82F6)),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),

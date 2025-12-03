@@ -15,7 +15,8 @@ class InventoryPage extends StatefulWidget {
   State<InventoryPage> createState() => _InventoryPageState();
 }
 
-class _InventoryPageState extends State<InventoryPage> with SingleTickerProviderStateMixin {
+class _InventoryPageState extends State<InventoryPage>
+    with SingleTickerProviderStateMixin {
   final ClientApiService _api = ClientApiService();
   RealtimeService? _realtimeService;
 
@@ -42,7 +43,6 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Recharger si le frigo sélectionné a changé
     _checkAndReloadIfNeeded();
   }
 
@@ -50,7 +50,9 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
     final prefs = await SharedPreferences.getInstance();
     final savedFridgeId = prefs.getInt('selected_fridge_id');
 
-    if (savedFridgeId != null && savedFridgeId != _selectedFridgeId && !_isLoading) {
+    if (savedFridgeId != null &&
+        savedFridgeId != _selectedFridgeId &&
+        !_isLoading) {
       _loadInventory();
     }
   }
@@ -67,12 +69,15 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const LoginPage()),
-            (route) => false,
+        (route) => false,
       );
     }
   }
 
-  Future<void> _loadInventory({bool showLoading = true, bool initRealtime = true}) async {
+  Future<void> _loadInventory({
+    bool showLoading = true,
+    bool initRealtime = true,
+  }) async {
     if (showLoading && mounted) {
       setState(() => _isLoading = true);
     }
@@ -92,23 +97,23 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
         return;
       }
 
-      // ✅ CORRECTION: Récupérer le frigo sélectionné depuis SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       int? savedFridgeId = prefs.getInt('selected_fridge_id');
 
       final previousFridgeId = _selectedFridgeId;
 
-      // ✅ Vérifier que le frigo sauvegardé existe toujours
-      if (savedFridgeId != null && fridges.any((f) => f['id'] == savedFridgeId)) {
+      if (savedFridgeId != null &&
+          fridges.any((f) => f['id'] == savedFridgeId)) {
         _selectedFridgeId = savedFridgeId;
       } else {
-        // Sinon, utiliser le premier frigo et sauvegarder
         _selectedFridgeId = fridges[0]['id'];
         await prefs.setInt('selected_fridge_id', _selectedFridgeId!);
       }
 
       if (kDebugMode) {
-        print('📦 InventoryPage: Loading inventory for fridge $_selectedFridgeId');
+        print(
+          '📦 InventoryPage: Loading inventory for fridge $_selectedFridgeId',
+        );
       }
 
       final inventory = await _api.getInventory(_selectedFridgeId!);
@@ -121,12 +126,11 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
         _isLoading = false;
       });
 
-      // Initialiser le realtime si nécessaire
-      if (initRealtime && (!_realtimeInitialized || previousFridgeId != _selectedFridgeId)) {
+      if (initRealtime &&
+          (!_realtimeInitialized || previousFridgeId != _selectedFridgeId)) {
         _startRealtimeListener();
         _realtimeInitialized = true;
       }
-
     } on SessionExpiredException {
       _handleSessionExpired();
     } catch (e) {
@@ -167,30 +171,32 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
         tokenProvider: () => _api.getFreshAccessToken(),
       );
 
-      _realtimeSubscription = _realtimeService!.listenToInventoryUpdates().listen(
+      _realtimeSubscription = _realtimeService!
+          .listenToInventoryUpdates()
+          .listen(
             (event) {
-          if (!mounted) return;
+              if (!mounted) return;
 
-          if (kDebugMode) print('📡 Événement reçu: ${event.type}');
+              if (kDebugMode) print('📡 Événement reçu: ${event.type}');
 
-          setState(() => _isConnectedRealtime = true);
+              setState(() => _isConnectedRealtime = true);
 
-          if (event.message == "Connexion SSE établie") {
-            return;
-          }
+              if (event.message == "Connexion SSE établie") {
+                return;
+              }
 
-          if (event.type != InventoryUpdateType.updated) {
-            _handleRealtimeEvent(event);
-          }
+              if (event.type != InventoryUpdateType.updated) {
+                _handleRealtimeEvent(event);
+              }
 
-          _refreshInventoryData();
-        },
-        onError: (error) {
-          if (!mounted) return;
-          if (kDebugMode) print('❌ Erreur temps réel: $error');
-          setState(() => _isConnectedRealtime = false);
-        },
-      );
+              _refreshInventoryData();
+            },
+            onError: (error) {
+              if (!mounted) return;
+              if (kDebugMode) print('❌ Erreur temps réel: $error');
+              setState(() => _isConnectedRealtime = false);
+            },
+          );
     } catch (e) {
       if (kDebugMode) print('Error starting realtime listener: $e');
       if (mounted) {
@@ -220,7 +226,13 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(children: [Icon(icon, color: Colors.white), const SizedBox(width: 12), Expanded(child: Text(event.message))]),
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text(event.message)),
+          ],
+        ),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
@@ -235,7 +247,8 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
 
       if (_searchQuery.isNotEmpty) {
         filtered = filtered.where((item) {
-          final productName = item['product_name'] ?? 'Produit #${item['product_id']}';
+          final productName =
+              item['product_name'] ?? 'Produit #${item['product_id']}';
           return productName.toLowerCase().contains(_searchQuery.toLowerCase());
         }).toList();
       }
@@ -261,12 +274,14 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
 
   void _handleError(dynamic e) {
     final errorMsg = e.toString();
-    if (errorMsg.contains('Session expirée') || errorMsg.contains('Non authentifié') || errorMsg.contains('401')) {
+    if (errorMsg.contains('Session expirée') ||
+        errorMsg.contains('Non authentifié') ||
+        errorMsg.contains('401')) {
       _api.logout();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginPage()),
-              (route) => false,
+          (route) => false,
         );
       }
     } else {
@@ -276,25 +291,31 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
   }
 
   void _showSuccess(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.green));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.green),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      floatingActionButton: _selectedFridgeId != null ? FloatingActionButton.extended(
-        onPressed: _showAddProductDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('Ajouter'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-      ) : null,
+      floatingActionButton: _selectedFridgeId != null
+          ? FloatingActionButton.extended(
+              onPressed: _showAddProductDialog,
+              icon: const Icon(Icons.add),
+              label: const Text('Ajouter'),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            )
+          : null,
       body: Column(
         children: [
           _buildAppBar(),
@@ -305,7 +326,9 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
                 ? const Center(child: CircularProgressIndicator())
                 : _selectedFridgeId == null
                 ? _buildNoFridgeState()
-                : _inventory.isEmpty ? _buildEmptyState() : _buildInventoryList(),
+                : _inventory.isEmpty
+                ? _buildEmptyState()
+                : _buildInventoryList(),
           ),
         ],
       ),
@@ -325,12 +348,30 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.kitchen_outlined, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              child: Icon(
+                Icons.kitchen_outlined,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 24),
-            Text('Aucun frigo connecté', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge?.color)),
+            Text(
+              'Aucun frigo connecté',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('Connectez un frigo depuis le tableau de bord\npour voir votre inventaire', textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color, height: 1.5)),
+            Text(
+              'Connectez un frigo depuis le tableau de bord\npour voir votre inventaire',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+                height: 1.5,
+              ),
+            ),
           ],
         ),
       ),
@@ -379,7 +420,9 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: _isConnectedRealtime ? Colors.green : Colors.grey,
+                        color: _isConnectedRealtime
+                            ? Colors.green
+                            : Colors.grey,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -396,10 +439,8 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
               ],
             ),
           ),
-          // ✅ NOUVEAU: Bouton pour créer liste depuis stock faible
           IconButton(
             onPressed: () {
-              // Naviguer vers les listes avec suggestion de génération auto
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -431,13 +472,36 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
         style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
         decoration: InputDecoration(
           hintText: 'Rechercher un produit...',
-          hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5)),
-          prefixIcon: Icon(Icons.search, color: Theme.of(context).iconTheme.color),
+          hintStyle: TextStyle(
+            color: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.color?.withOpacity(0.5),
+          ),
+          prefixIcon: Icon(
+            Icons.search,
+            color: Theme.of(context).iconTheme.color,
+          ),
           filled: true,
           fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.outline)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(
+              color: Theme.of(context).colorScheme.outline,
+            ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(
+              color: Theme.of(context).colorScheme.outline,
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(
+              color: Theme.of(context).colorScheme.primary,
+              width: 2,
+            ),
+          ),
           contentPadding: const EdgeInsets.symmetric(vertical: 12),
         ),
       ),
@@ -455,13 +519,18 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
         indicatorColor: Theme.of(context).colorScheme.primary,
         indicatorWeight: 3,
         labelStyle: const TextStyle(fontWeight: FontWeight.w600),
-        tabs: const [Tab(text: 'Tous'), Tab(text: 'À consommer'), Tab(text: 'Expirés')],
+        tabs: const [
+          Tab(text: 'Tous'),
+          Tab(text: 'À consommer'),
+          Tab(text: 'Expirés'),
+        ],
       ),
     );
   }
 
   Widget _buildInventoryItem(Map<String, dynamic> item) {
-    final productName = item['product_name'] ?? 'Produit #${item['product_id']}';
+    final productName =
+        item['product_name'] ?? 'Produit #${item['product_id']}';
     final category = item['product_category'] ?? '';
     final freshnessStatus = item['freshness_status'] ?? 'unknown';
     final freshnessLabel = item['freshness_label'];
@@ -516,8 +585,15 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                  child: Icon(Icons.shopping_basket_outlined, color: statusColor, size: 24),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.shopping_basket_outlined,
+                    color: statusColor,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -527,59 +603,158 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
                       Row(
                         children: [
                           Expanded(
-                            child: Text(productName, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Theme.of(context).textTheme.bodyLarge?.color)),
+                            child: Text(
+                              productName,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                                color: Theme.of(
+                                  context,
+                                ).textTheme.bodyLarge?.color,
+                              ),
+                            ),
                           ),
                           if (isOpened)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.blue.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Text('Ouvert', style: TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.w500)),
+                              child: const Text(
+                                'Ouvert',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.blue,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                             ),
                         ],
                       ),
                       if (category.isNotEmpty) ...[
                         const SizedBox(height: 2),
-                        Text(category, style: TextStyle(fontSize: 12, color: Theme.of(context).textTheme.bodySmall?.color)),
+                        Text(
+                          category,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
                       ],
                       const SizedBox(height: 6),
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(6)),
-                            child: Text('${item['quantity'] ?? 0} ${item['unit'] ?? ''}', style: TextStyle(fontSize: 12, color: Theme.of(context).textTheme.bodyMedium?.color, fontWeight: FontWeight.w500)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${item['quantity'] ?? 0} ${item['unit'] ?? ''}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(
+                                  context,
+                                ).textTheme.bodyMedium?.color,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Icon(statusIcon, size: 14, color: statusColor),
                           const SizedBox(width: 4),
                           Expanded(
-                            child: Text(statusText, style: TextStyle(fontSize: 12, color: statusColor, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
+                            child: Text(
+                              statusText,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: statusColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
                       if (item['expiry_date'] != null) ...[
                         const SizedBox(height: 4),
-                        Text(_formatExpiryDate(item['expiry_date']), style: TextStyle(fontSize: 11, color: Theme.of(context).textTheme.bodySmall?.color)),
+                        Text(
+                          _formatExpiryDate(item['expiry_date']),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
                       ],
                     ],
                   ),
                 ),
                 PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert, color: Theme.of(context).iconTheme.color),
+                  icon: Icon(
+                    Icons.more_vert,
+                    color: Theme.of(context).iconTheme.color,
+                  ),
                   onSelected: (value) {
                     switch (value) {
-                      case 'edit': _showEditQuantityDialog(item); break;
-                      case 'consume': _showConsumeDialog(item); break;
-                      case 'delete': _confirmDeleteItem(item); break;
+                      case 'edit':
+                        _showEditQuantityDialog(item);
+                        break;
+                      case 'consume':
+                        _showConsumeDialog(item);
+                        break;
+                      case 'delete':
+                        _confirmDeleteItem(item);
+                        break;
                     }
                   },
                   itemBuilder: (context) => [
-                    const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 20), SizedBox(width: 12), Text('Modifier')])),
-                    const PopupMenuItem(value: 'consume', child: Row(children: [Icon(Icons.remove_circle_outline, size: 20), SizedBox(width: 12), Text('Consommer')])),
-                    const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 20, color: Colors.red), SizedBox(width: 12), Text('Supprimer', style: TextStyle(color: Colors.red))])),
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 20),
+                          SizedBox(width: 12),
+                          Text('Modifier'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'consume',
+                      child: Row(
+                        children: [
+                          Icon(Icons.remove_circle_outline, size: 20),
+                          SizedBox(width: 12),
+                          Text('Consommer'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.delete_outline,
+                            size: 20,
+                            color: Colors.red,
+                          ),
+                          SizedBox(width: 12),
+                          Text(
+                            'Supprimer',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -591,7 +766,8 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
   }
 
   void _showItemDetails(Map<String, dynamic> item) {
-    final productName = item['product_name'] ?? 'Produit #${item['product_id']}';
+    final productName =
+        item['product_name'] ?? 'Produit #${item['product_id']}';
     final category = item['product_category'] ?? '';
     final freshnessLabel = item['freshness_label'] ?? 'Inconnu';
     final isOpened = item['is_opened'] ?? false;
@@ -601,44 +777,97 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => Container(
-        decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Theme.of(context).colorScheme.outline, borderRadius: BorderRadius.circular(2)))),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outline,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
-            Text(productName, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge?.color)),
+            Text(
+              productName,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+            ),
             if (category.isNotEmpty) ...[
               const SizedBox(height: 4),
-              Text(category, style: TextStyle(fontSize: 14, color: Theme.of(context).textTheme.bodyMedium?.color)),
+              Text(
+                category,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
+              ),
             ],
             const SizedBox(height: 24),
-            _buildDetailRow('Quantité', '${item['quantity'] ?? 0} ${item['unit'] ?? ''}'),
+            _buildDetailRow(
+              'Quantité',
+              '${item['quantity'] ?? 0} ${item['unit'] ?? ''}',
+            ),
             _buildDetailRow('Statut', freshnessLabel),
-            if (item['expiry_date'] != null) _buildDetailRow('Expiration', _formatExpiryDate(item['expiry_date'])),
-            if (item['added_at'] != null) _buildDetailRow('Ajouté le', _formatDate(item['added_at'])),
-            _buildDetailRow('Source', item['source'] == 'vision' ? 'Scan automatique' : 'Ajout manuel'),
+            if (item['expiry_date'] != null)
+              _buildDetailRow(
+                'Expiration',
+                _formatExpiryDate(item['expiry_date']),
+              ),
+            if (item['added_at'] != null)
+              _buildDetailRow('Ajouté le', _formatDate(item['added_at'])),
+            _buildDetailRow(
+              'Source',
+              item['source'] == 'vision' ? 'Scan automatique' : 'Ajout manuel',
+            ),
             if (isOpened) _buildDetailRow('État', 'Ouvert'),
             const SizedBox(height: 24),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () { Navigator.pop(context); _showEditQuantityDialog(item); },
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showEditQuantityDialog(item);
+                    },
                     icon: const Icon(Icons.edit_outlined),
                     label: const Text('Modifier'),
-                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () { Navigator.pop(context); _showConsumeDialog(item); },
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showConsumeDialog(item);
+                    },
                     icon: const Icon(Icons.remove_circle_outline),
                     label: const Text('Consommer'),
-                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -655,8 +884,21 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color, fontSize: 14)),
-          Text(value, style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color, fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: TextStyle(
+              color: Theme.of(context).textTheme.bodyMedium?.color,
+              fontSize: 14,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: Theme.of(context).textTheme.bodyLarge?.color,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -669,13 +911,48 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, shape: BoxShape.circle), child: Icon(Icons.inventory_2_outlined, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.inventory_2_outlined,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
             const SizedBox(height: 24),
-            Text('Aucun produit', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge?.color)),
+            Text(
+              'Aucun produit',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('Scannez des produits depuis le frigo\nou ajoutez-en manuellement', textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color, height: 1.5)),
+            Text(
+              'Scannez des produits depuis le frigo\nou ajoutez-en manuellement',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+                height: 1.5,
+              ),
+            ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(onPressed: _showAddProductDialog, icon: const Icon(Icons.add), label: const Text('Ajouter un produit'), style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12))),
+            ElevatedButton.icon(
+              onPressed: _showAddProductDialog,
+              icon: const Icon(Icons.add),
+              label: const Text('Ajouter un produit'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -690,11 +967,30 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.search_off, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              Icon(
+                Icons.search_off,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               const SizedBox(height: 16),
-              Text('Aucun résultat', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Theme.of(context).textTheme.bodyLarge?.color)),
+              Text(
+                'Aucun résultat',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text(_searchQuery.isNotEmpty ? 'Aucun produit ne correspond à "$_searchQuery"' : 'Aucun produit dans cette catégorie', textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
+              Text(
+                _searchQuery.isNotEmpty
+                    ? 'Aucun produit ne correspond à "$_searchQuery"'
+                    : 'Aucun produit dans cette catégorie',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
+              ),
             ],
           ),
         ),
@@ -706,7 +1002,8 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _filteredInventory.length,
-        itemBuilder: (context, index) => _buildInventoryItem(_filteredInventory[index]),
+        itemBuilder: (context, index) =>
+            _buildInventoryItem(_filteredInventory[index]),
       ),
     );
   }
@@ -716,7 +1013,9 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
     try {
       final date = DateTime.parse(dateStr);
       return 'Expire le ${DateFormat('d MMM yyyy', 'fr_FR').format(date)}';
-    } catch (e) { return dateStr; }
+    } catch (e) {
+      return dateStr;
+    }
   }
 
   String _formatDate(String? dateStr) {
@@ -724,7 +1023,9 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
     try {
       final date = DateTime.parse(dateStr);
       return DateFormat('d MMM yyyy', 'fr_FR').format(date);
-    } catch (e) { return dateStr; }
+    } catch (e) {
+      return dateStr;
+    }
   }
 
   Future<void> _showAddProductDialog() async {
@@ -738,7 +1039,18 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
     final unitController = TextEditingController(text: 'pièce');
     String selectedCategory = 'Divers';
     DateTime? selectedExpiryDate;
-    final categories = ['Divers', 'Produit laitier', 'Viande', 'Poisson', 'Fruit', 'Légume', 'Boisson', 'Condiment', 'Plat préparé', 'Surgelé'];
+    final categories = [
+      'Divers',
+      'Produit laitier',
+      'Viande',
+      'Poisson',
+      'Fruit',
+      'Légume',
+      'Boisson',
+      'Condiment',
+      'Plat préparé',
+      'Surgelé',
+    ];
 
     await showModalBottomSheet(
       context: context,
@@ -747,47 +1059,167 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) => Container(
           height: MediaQuery.of(context).size.height * 0.75,
-          decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
           child: Padding(
-            padding: EdgeInsets.only(left: 24, right: 24, top: 24, bottom: MediaQuery.of(context).viewInsets.bottom + 24),
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Theme.of(context).colorScheme.outline, borderRadius: BorderRadius.circular(2)))),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.outline,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 20),
-                Text('Ajouter un produit', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge?.color)),
+                Text(
+                  'Ajouter un produit',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
+                ),
                 const SizedBox(height: 24),
                 Expanded(
                   child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        TextField(controller: nameController, decoration: InputDecoration(labelText: 'Nom du produit *', hintText: 'Ex: Lait, Œufs, Tomates...', prefixIcon: const Icon(Icons.shopping_basket_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), textCapitalization: TextCapitalization.sentences),
+                        TextField(
+                          controller: nameController,
+                          decoration: InputDecoration(
+                            labelText: 'Nom du produit *',
+                            hintText: 'Ex: Lait, Œufs, Tomates...',
+                            prefixIcon: const Icon(
+                              Icons.shopping_basket_outlined,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          textCapitalization: TextCapitalization.sentences,
+                        ),
                         const SizedBox(height: 16),
-                        DropdownButtonFormField<String>(value: selectedCategory, decoration: InputDecoration(labelText: 'Catégorie', prefixIcon: const Icon(Icons.category_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))), items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(), onChanged: (v) => setStateDialog(() => selectedCategory = v ?? 'Divers')),
+                        DropdownButtonFormField<String>(
+                          value: selectedCategory,
+                          decoration: InputDecoration(
+                            labelText: 'Catégorie',
+                            prefixIcon: const Icon(Icons.category_outlined),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          items: categories
+                              .map(
+                                (c) =>
+                                    DropdownMenuItem(value: c, child: Text(c)),
+                              )
+                              .toList(),
+                          onChanged: (v) => setStateDialog(
+                            () => selectedCategory = v ?? 'Divers',
+                          ),
+                        ),
                         const SizedBox(height: 16),
                         Row(
                           children: [
-                            Expanded(flex: 2, child: TextField(controller: quantityController, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Quantité *', prefixIcon: const Icon(Icons.numbers), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+                            Expanded(
+                              flex: 2,
+                              child: TextField(
+                                controller: quantityController,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  labelText: 'Quantité *',
+                                  prefixIcon: const Icon(Icons.numbers),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
                             const SizedBox(width: 12),
-                            Expanded(flex: 2, child: TextField(controller: unitController, decoration: InputDecoration(labelText: 'Unité', hintText: 'pièce, kg, L...', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+                            Expanded(
+                              flex: 2,
+                              child: TextField(
+                                controller: unitController,
+                                decoration: InputDecoration(
+                                  labelText: 'Unité',
+                                  hintText: 'pièce, kg, L...',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 16),
                         InkWell(
                           onTap: () async {
-                            final date = await showDatePicker(context: context, initialDate: DateTime.now().add(const Duration(days: 7)), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365 * 2)));
-                            if (date != null) setStateDialog(() => selectedExpiryDate = date);
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime.now().add(
+                                const Duration(days: 7),
+                              ),
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(
+                                const Duration(days: 365 * 2),
+                              ),
+                            );
+                            if (date != null) {
+                              setStateDialog(() => selectedExpiryDate = date);
+                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(border: Border.all(color: Theme.of(context).colorScheme.outline), borderRadius: BorderRadius.circular(12)),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             child: Row(
                               children: [
-                                Icon(Icons.calendar_today, color: Theme.of(context).iconTheme.color),
+                                Icon(
+                                  Icons.calendar_today,
+                                  color: Theme.of(context).iconTheme.color,
+                                ),
                                 const SizedBox(width: 12),
-                                Expanded(child: Text(selectedExpiryDate != null ? 'Expire le ${DateFormat('dd/MM/yyyy').format(selectedExpiryDate!)}' : 'Date d\'expiration (optionnel)', style: TextStyle(color: selectedExpiryDate != null ? Theme.of(context).textTheme.bodyLarge?.color : Theme.of(context).textTheme.bodyMedium?.color))),
-                                if (selectedExpiryDate != null) IconButton(icon: const Icon(Icons.clear, size: 20), onPressed: () => setStateDialog(() => selectedExpiryDate = null)),
+                                Expanded(
+                                  child: Text(
+                                    selectedExpiryDate != null
+                                        ? 'Expire le ${DateFormat('dd/MM/yyyy').format(selectedExpiryDate!)}'
+                                        : 'Date d\'expiration (optionnel)',
+                                    style: TextStyle(
+                                      color: selectedExpiryDate != null
+                                          ? Theme.of(
+                                              context,
+                                            ).textTheme.bodyLarge?.color
+                                          : Theme.of(
+                                              context,
+                                            ).textTheme.bodyMedium?.color,
+                                    ),
+                                  ),
+                                ),
+                                if (selectedExpiryDate != null)
+                                  IconButton(
+                                    icon: const Icon(Icons.clear, size: 20),
+                                    onPressed: () => setStateDialog(
+                                      () => selectedExpiryDate = null,
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
@@ -803,16 +1235,38 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
                     onPressed: () async {
                       final name = nameController.text.trim();
                       final qty = double.tryParse(quantityController.text);
-                      if (name.isEmpty) { _showError('Entrez un nom de produit'); return; }
-                      if (qty == null || qty <= 0) { _showError('Quantité invalide'); return; }
+                      if (name.isEmpty) {
+                        _showError('Entrez un nom de produit');
+                        return;
+                      }
+                      if (qty == null || qty <= 0) {
+                        _showError('Quantité invalide');
+                        return;
+                      }
                       try {
-                        await _api.addInventoryItem(fridgeId: _selectedFridgeId!, productName: name, category: selectedCategory, quantity: qty, unit: unitController.text.trim().isEmpty ? 'pièce' : unitController.text.trim(), expiryDate: selectedExpiryDate);
+                        await _api.addInventoryItem(
+                          fridgeId: _selectedFridgeId!,
+                          productName: name,
+                          category: selectedCategory,
+                          quantity: qty,
+                          unit: unitController.text.trim().isEmpty
+                              ? 'pièce'
+                              : unitController.text.trim(),
+                          expiryDate: selectedExpiryDate,
+                        );
                         Navigator.pop(context);
                         _showSuccess('$name ajouté !');
                         _loadInventory(showLoading: false);
-                      } catch (e) { _showError('Erreur: $e'); }
+                      } catch (e) {
+                        _showError('Erreur: $e');
+                      }
                     },
-                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                     child: const Text('Ajouter'),
                   ),
                 ),
@@ -827,44 +1281,351 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
   Future<void> _showEditQuantityDialog(Map<String, dynamic> item) async {
     if (_selectedFridgeId == null) return;
 
-    final controller = TextEditingController(text: item['quantity']?.toString() ?? '0');
-    final productName = item['product_name'] ?? 'Produit #${item['product_id']}';
+    final productName =
+        item['product_name'] ?? 'Produit #${item['product_id']}';
+    final quantityController = TextEditingController(
+      text: item['quantity']?.toString() ?? '0',
+    );
+    final unitController = TextEditingController(text: item['unit'] ?? 'pièce');
+    DateTime? selectedExpiryDate;
 
-    await showDialog(
+    if (item['expiry_date'] != null) {
+      try {
+        selectedExpiryDate = DateTime.parse(item['expiry_date']);
+      } catch (e) {
+        if (kDebugMode) print('Error parsing expiry date: $e');
+      }
+    }
+
+    await showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: Theme.of(context).cardColor,
-        title: Text('Modifier la quantité', style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(productName, style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
-              decoration: InputDecoration(labelText: 'Nouvelle quantité (${item['unit'] ?? ''})', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setStateDialog) => Container(
+          height: MediaQuery.of(context).size.height * 0.65,
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
             ),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.outline,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.edit_outlined,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Modifier le produit',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(
+                                context,
+                              ).textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            productName,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.color,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: TextField(
+                                controller: quantityController,
+                                keyboardType: TextInputType.number,
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyLarge?.color,
+                                ),
+                                decoration: InputDecoration(
+                                  labelText: 'Quantité *',
+                                  prefixIcon: const Icon(Icons.numbers),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextField(
+                                controller: unitController,
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyLarge?.color,
+                                ),
+                                decoration: InputDecoration(
+                                  labelText: 'Unité',
+                                  hintText: 'pièce, kg, L...',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        InkWell(
+                          onTap: () async {
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate:
+                                  selectedExpiryDate ??
+                                  DateTime.now().add(const Duration(days: 7)),
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(
+                                const Duration(days: 365 * 2),
+                              ),
+                            );
+                            if (date != null) {
+                              setStateDialog(() => selectedExpiryDate = date);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today,
+                                  color: Theme.of(context).iconTheme.color,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    selectedExpiryDate != null
+                                        ? 'Expire le ${DateFormat('dd/MM/yyyy').format(selectedExpiryDate!)}'
+                                        : 'Date d\'expiration (optionnel)',
+                                    style: TextStyle(
+                                      color: selectedExpiryDate != null
+                                          ? Theme.of(
+                                              context,
+                                            ).textTheme.bodyLarge?.color
+                                          : Theme.of(
+                                              context,
+                                            ).textTheme.bodyMedium?.color,
+                                    ),
+                                  ),
+                                ),
+                                if (selectedExpiryDate != null)
+                                  IconButton(
+                                    icon: const Icon(Icons.clear, size: 20),
+                                    onPressed: () => setStateDialog(
+                                      () => selectedExpiryDate = null,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: 16,
+                                    color: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium?.color,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Informations du produit',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: Theme.of(
+                                        context,
+                                      ).textTheme.bodyLarge?.color,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              _buildInfoRowCompact(
+                                'Catégorie',
+                                item['product_category'] ?? 'Non catégorisé',
+                              ),
+                              _buildInfoRowCompact(
+                                'Source',
+                                item['source'] == 'vision'
+                                    ? 'Scan auto'
+                                    : 'Manuel',
+                              ),
+                              if (item['added_at'] != null)
+                                _buildInfoRowCompact(
+                                  'Ajouté',
+                                  _formatDate(item['added_at']),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Annuler'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final qty = double.tryParse(quantityController.text);
+                          if (qty == null || qty < 0) {
+                            _showError('Quantité invalide');
+                            return;
+                          }
+
+                          try {
+                            await _api.updateInventoryItem(
+                              fridgeId: _selectedFridgeId!,
+                              itemId: item['id'],
+                              quantity: qty,
+                              expiryDate: selectedExpiryDate,
+                            );
+                            Navigator.pop(context);
+                            _showSuccess('Produit mis à jour');
+                            _loadInventory(showLoading: false);
+                          } catch (e) {
+                            _showError('Erreur: $e');
+                          }
+                        },
+                        icon: const Icon(Icons.check),
+                        label: const Text('Enregistrer'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-          ElevatedButton(
-            onPressed: () async {
-              final qty = double.tryParse(controller.text);
-              if (qty == null || qty < 0) { _showError('Quantité invalide'); return; }
-              try {
-                await _api.updateInventoryItem(fridgeId: _selectedFridgeId!, itemId: item['id'], quantity: qty);
-                Navigator.pop(context);
-                _showSuccess('Quantité mise à jour');
-                _loadInventory(showLoading: false);
-              } catch (e) { _showError('Erreur: $e'); }
-            },
-            style: ElevatedButton.styleFrom(elevation: 0),
-            child: const Text('Enregistrer'),
+      ),
+    );
+  }
+
+  Widget _buildInfoRowCompact(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          Text(
+            '$label: ',
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).textTheme.bodyMedium?.color,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -875,39 +1636,68 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
     if (_selectedFridgeId == null) return;
 
     final controller = TextEditingController();
-    final productName = item['product_name'] ?? 'Produit #${item['product_id']}';
+    final productName =
+        item['product_name'] ?? 'Produit #${item['product_id']}';
 
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: Theme.of(context).cardColor,
-        title: Text('Consommer', style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+        title: Text(
+          'Consommer',
+          style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(productName, style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
+            Text(
+              productName,
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+              ),
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: controller,
               keyboardType: TextInputType.number,
-              style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
-              decoration: InputDecoration(labelText: 'Quantité (${item['unit'] ?? ''})', hintText: 'Max: ${item['quantity'] ?? 0}', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+              decoration: InputDecoration(
+                labelText: 'Quantité (${item['unit'] ?? ''})',
+                hintText: 'Max: ${item['quantity'] ?? 0}',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
           ElevatedButton(
             onPressed: () async {
               try {
                 final qty = double.tryParse(controller.text);
-                if (qty == null || qty <= 0) { _showError('Quantité invalide'); return; }
-                await _api.consumeItem(fridgeId: _selectedFridgeId!, itemId: item['id'], quantityConsumed: qty);
+                if (qty == null || qty <= 0) {
+                  _showError('Quantité invalide');
+                  return;
+                }
+                await _api.consumeItem(
+                  fridgeId: _selectedFridgeId!,
+                  itemId: item['id'],
+                  quantityConsumed: qty,
+                );
                 Navigator.pop(context);
                 _showSuccess('Article consommé');
                 _loadInventory(showLoading: false);
-              } catch (e) { _showError('Erreur: $e'); }
+              } catch (e) {
+                _showError('Erreur: $e');
+              }
             },
             style: ElevatedButton.styleFrom(elevation: 0),
             child: const Text('Confirmer'),
@@ -920,7 +1710,8 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
   Future<void> _confirmDeleteItem(Map<String, dynamic> item) async {
     if (_selectedFridgeId == null) return;
 
-    final productName = item['product_name'] ?? 'Produit #${item['product_id']}';
+    final productName =
+        item['product_name'] ?? 'Produit #${item['product_id']}';
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -929,10 +1720,16 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
         title: const Text('Supprimer ce produit ?'),
         content: Text('$productName sera retiré de votre inventaire.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Supprimer'),
           ),
         ],
@@ -941,10 +1738,15 @@ class _InventoryPageState extends State<InventoryPage> with SingleTickerProvider
 
     if (confirmed == true) {
       try {
-        await _api.deleteInventoryItem(fridgeId: _selectedFridgeId!, itemId: item['id']);
+        await _api.deleteInventoryItem(
+          fridgeId: _selectedFridgeId!,
+          itemId: item['id'],
+        );
         _showSuccess('Produit supprimé');
         _loadInventory(showLoading: false);
-      } catch (e) { _showError('Erreur: $e'); }
+      } catch (e) {
+        _showError('Erreur: $e');
+      }
     }
   }
 }

@@ -12,9 +12,13 @@ class RecipesPage extends StatefulWidget {
   State<RecipesPage> createState() => _RecipesPageState();
 }
 
-class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStateMixin {
+class _RecipesPageState extends State<RecipesPage>
+    with SingleTickerProviderStateMixin {
   final ClientApiService _api = ClientApiService();
   late TabController _tabController;
+
+  String _currentSort = 'match';
+  String _sortOrder = 'desc';
 
   List<dynamic> _allRecipes = [];
   List<dynamic> _feasibleRecipes = [];
@@ -36,10 +40,106 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Vérifier après un court délai pour laisser le temps aux prefs de se mettre à jour
     Future.delayed(const Duration(milliseconds: 100), () {
       if (mounted) _checkAndReloadIfNeeded();
     });
+  }
+
+  void _showSortOptions() {
+    // âœ… DÃ©terminer quelles options sont disponibles selon l'onglet actif
+    final bool isOnFeasibleTab = _tabController.index == 0;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.sort, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 12),
+                const Text(
+                  'Trier par',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // âœ… "Match" seulement pour l'onglet "RÃ©alisables"
+            if (isOnFeasibleTab)
+              _buildSortOption(
+                icon: Icons.pie_chart,
+                title: 'Pourcentage de match',
+                value: 'match',
+              ),
+
+            // âœ… Options communes Ã  tous les onglets
+            _buildSortOption(
+              icon: Icons.sort_by_alpha,
+              title: 'Nom (A-Z)',
+              value: 'name',
+            ),
+            _buildSortOption(
+              icon: Icons.calendar_today,
+              title: 'Date d\'ajout',
+              value: 'date',
+            ),
+            _buildSortOption(
+              icon: Icons.schedule,
+              title: 'Temps de prÃ©paration',
+              value: 'time',
+            ),
+
+            const Divider(height: 32),
+
+            // Ordre de tri
+            ListTile(
+              leading: const Icon(Icons.swap_vert),
+              title: Text(
+                'Ordre: ${_sortOrder == 'desc' ? 'DÃ©croissant' : 'Croissant'}',
+              ),
+              trailing: Switch(
+                value: _sortOrder == 'desc',
+                onChanged: (value) {
+                  setState(() {
+                    _sortOrder = value ? 'desc' : 'asc';
+                  });
+                  Navigator.pop(context);
+                  _loadRecipes();
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSortOption({
+    required IconData icon,
+    required String title,
+    required String value,
+    bool isVisible = true,
+  }) {
+    if (!isVisible) return const SizedBox.shrink();
+
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title),
+      trailing: _currentSort == value ? const Icon(Icons.check) : null,
+      onTap: () {
+        setState(() => _currentSort = value);
+        Navigator.pop(context);
+        _loadRecipes();
+      },
+    );
   }
 
   Future<void> _checkAndReloadIfNeeded() async {
@@ -47,10 +147,11 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     final savedFridgeId = prefs.getInt('selected_fridge_id');
 
     if (kDebugMode) {
-      print('🔄 RecipesPage: Checking fridge - saved=$savedFridgeId, current=$_selectedFridgeId');
+      print(
+        '🔄 RecipesPage: Checking fridge - saved=$savedFridgeId, current=$_selectedFridgeId',
+      );
     }
 
-    // Recharger si le frigo a changé OU si on n'a pas encore de frigo sélectionné
     if (savedFridgeId != _selectedFridgeId) {
       if (kDebugMode) {
         print('🔄 RecipesPage: Fridge changed! Reloading...');
@@ -93,7 +194,9 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Row(
             children: [
               Container(
@@ -129,8 +232,10 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.restaurant_menu,
-                        color: Theme.of(context).colorScheme.primary),
+                    Icon(
+                      Icons.restaurant_menu,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     const SizedBox(width: 12),
                     const Expanded(
                       child: Text(
@@ -183,7 +288,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
 
   Future<void> _loadRecipes() async {
     if (!mounted) return;
-
     setState(() => _isLoading = true);
 
     try {
@@ -191,9 +295,9 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       final prefs = await SharedPreferences.getInstance();
       int? savedFridgeId = prefs.getInt('selected_fridge_id');
 
-      // Déterminer le frigo actif
       if (fridges.isNotEmpty) {
-        if (savedFridgeId != null && fridges.any((f) => f['id'] == savedFridgeId)) {
+        if (savedFridgeId != null &&
+            fridges.any((f) => f['id'] == savedFridgeId)) {
           _selectedFridgeId = savedFridgeId;
         } else {
           _selectedFridgeId = fridges[0]['id'];
@@ -203,19 +307,23 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
         _selectedFridgeId = null;
       }
 
-      if (kDebugMode) {
-        print('🍳 RecipesPage: Loading recipes for fridge $_selectedFridgeId');
-      }
-
       List<dynamic> allRecipes = [];
       List<dynamic> feasibleRecipes = [];
       List<dynamic> favoriteRecipes = [];
 
       if (_selectedFridgeId != null) {
-        // ✅ Charger en parallèle UNIQUEMENT pour le frigo sélectionné
         final results = await Future.wait([
-          _api.getRecipes(),
-          _api.getFeasibleRecipes(_selectedFridgeId!),  // Spécifique au frigo
+          // âœ… Pour "Toutes" : pas de tri par match
+          _api.getRecipes(
+            sortBy: _currentSort == 'match' ? 'date' : _currentSort,
+            sortOrder: _sortOrder,
+          ),
+          // âœ… Pour "RÃ©alisables" : tri par match autorisÃ©
+          _api.getFeasibleRecipes(
+            _selectedFridgeId!,
+            sortBy: _currentSort,
+            sortOrder: _sortOrder,
+          ),
           _api.getFavoriteRecipes(),
         ]);
 
@@ -223,15 +331,17 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
         feasibleRecipes = results[1];
         favoriteRecipes = results[2];
       } else {
-        // Pas de frigo : charger seulement les recettes globales
         final results = await Future.wait([
-          _api.getRecipes(),
+          _api.getRecipes(
+            sortBy: _currentSort == 'match' ? 'date' : _currentSort,
+            sortOrder: _sortOrder,
+          ),
           _api.getFavoriteRecipes(),
         ]);
 
         allRecipes = results[0];
         favoriteRecipes = results[1];
-        feasibleRecipes = [];  // ✅ Vide si pas de frigo
+        feasibleRecipes = [];
       }
 
       final favoriteIds = favoriteRecipes.map((r) => r['id'] as int).toSet();
@@ -248,24 +358,15 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-
-      if (e.toString().contains('Non autorisé') || e.toString().contains('401')) {
-        await _api.logout();
-        if (mounted) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const LoginPage()),
-                (route) => false,
-          );
-        }
-      } else {
-        _showError('Erreur: $e');
-      }
+      _showError('Erreur: $e');
     }
   }
 
   Future<void> _discoverRecipe() async {
     if (_selectedFridgeId == null) {
-      _showError('Aucun frigo sélectionné. Connectez un frigo depuis le tableau de bord.');
+      _showError(
+        'Aucun frigo sélectionné. Connectez un frigo depuis le tableau de bord.',
+      );
       return;
     }
 
@@ -333,14 +434,15 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     }
   }
 
-  Future<void> _generateShoppingListFromSuggestion(Map<String, dynamic> suggestion) async {
+  Future<void> _generateShoppingListFromSuggestion(
+    Map<String, dynamic> suggestion,
+  ) async {
     if (_selectedFridgeId == null) {
       _showError('Aucun frigo sélectionné');
       return;
     }
 
     try {
-      // ✅ ÉTAPE 1 : Sauvegarder la recette d'abord pour obtenir son ID
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -361,7 +463,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
         ),
       );
 
-      // Sauvegarder la recette
       final savedRecipe = await _api.saveSuggestedRecipe(suggestion);
       final recipeId = savedRecipe['id'] as int;
 
@@ -369,38 +470,36 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
         print('✅ Recette sauvegardée avec ID: $recipeId');
       }
 
-      // ✅ ÉTAPE 2 : Créer la liste de courses AVEC le recipe_id
-      final missingIngredients = (suggestion['missing_ingredients'] as List? ?? [])
-          .map<Map<String, dynamic>>((e) {
-        if (e is Map<String, dynamic>) {
-          return e;
-        }
-        return {'name': e.toString()};
-      }).toList();
+      final missingIngredients =
+          (suggestion['missing_ingredients'] as List? ?? [])
+              .map<Map<String, dynamic>>((e) {
+                if (e is Map<String, dynamic>) {
+                  return e;
+                }
+                return {'name': e.toString()};
+              })
+              .toList();
 
       final result = await _api.generateShoppingListFromIngredients(
         fridgeId: _selectedFridgeId!,
         ingredients: missingIngredients,
-        recipeId: recipeId,  // ✅ NOUVEAU : Passer le recipe_id
+        recipeId: recipeId,
       );
 
       if (!mounted) return;
-      Navigator.pop(context); // Fermer le loading
+      Navigator.pop(context);
 
       final itemsCount = (result['items'] as List?)?.length ?? 0;
 
       _showSuccess('Liste créée avec $itemsCount article(s) !');
 
-      // Recharger les recettes pour mettre à jour les statuts
       _loadRecipes();
-
     } catch (e) {
       if (!mounted) return;
       Navigator.pop(context);
       _showError('Erreur: $e');
     }
   }
-
 
   Future<void> _generateShoppingList(Map<String, dynamic> recipe) async {
     if (_selectedFridgeId == null) {
@@ -419,7 +518,9 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           backgroundColor: Theme.of(context).cardColor,
           title: Row(
             children: [
@@ -428,7 +529,9 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
               Expanded(
                 child: Text(
                   'Liste générée',
-                  style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+                  style: TextStyle(
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
                 ),
               ),
             ],
@@ -439,7 +542,10 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
             children: [
               Text(
                 'Votre liste de courses a été créée avec succès !',
-                style: TextStyle(fontSize: 15, color: Theme.of(context).textTheme.bodyMedium?.color),
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
               ),
               const SizedBox(height: 16),
               Container(
@@ -450,7 +556,10 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.shopping_cart, color: Theme.of(context).colorScheme.primary),
+                    Icon(
+                      Icons.shopping_cart,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     const SizedBox(width: 12),
                     Text(
                       '${(result['items'] as List).length} article(s)',
@@ -474,7 +583,9 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ShoppingListsPage()),
+                  MaterialPageRoute(
+                    builder: (context) => const ShoppingListsPage(),
+                  ),
                 );
               },
               style: ElevatedButton.styleFrom(elevation: 0),
@@ -505,20 +616,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'recipes_shopping_fab',
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const ShoppingListsPage()),
-          );
-        },
-        icon: const Icon(Icons.shopping_cart),
-        label: const Text('Mes listes'),
-        backgroundColor: const Color(0xFF10B981),
-        foregroundColor: Colors.white,
-      ),
       body: Column(
         children: [
           _buildAppBar(),
@@ -528,13 +625,13 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildFeasibleRecipes(),
-                _buildAllRecipes(),
-                _buildFavoriteRecipes(),
-              ],
-            ),
+                    controller: _tabController,
+                    children: [
+                      _buildFeasibleRecipes(),
+                      _buildAllRecipes(),
+                      _buildFavoriteRecipes(),
+                    ],
+                  ),
           ),
         ],
       ),
@@ -577,19 +674,17 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                           fontSize: 12,
                         ),
                       ),
-                    ] else ...[
-                      const Text(
-                        ' • Aucun frigo',
-                        style: TextStyle(
-                          color: Colors.orange,
-                          fontSize: 12,
-                        ),
-                      ),
                     ],
                   ],
                 ),
               ],
             ),
+          ),
+          // ✅ AJOUT : Bouton de tri
+          IconButton(
+            icon: const Icon(Icons.sort),
+            onPressed: _showSortOptions,
+            tooltip: 'Trier',
           ),
           IconButton(
             onPressed: _loadRecipes,
@@ -616,20 +711,22 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
               end: Alignment.bottomRight,
               colors: canDiscover
                   ? [
-                Theme.of(context).colorScheme.primary,
-                Theme.of(context).colorScheme.secondary,
-              ]
+                      Theme.of(context).colorScheme.primary,
+                      Theme.of(context).colorScheme.secondary,
+                    ]
                   : [Colors.grey.shade400, Colors.grey.shade500],
             ),
             borderRadius: BorderRadius.circular(16),
             boxShadow: canDiscover
                 ? [
-              BoxShadow(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ]
+                    BoxShadow(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
                 : null,
           ),
           child: Row(
@@ -642,14 +739,20 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                 ),
                 child: _isDiscovering
                     ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-                    : const Icon(Icons.auto_awesome, color: Colors.white, size: 24),
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.auto_awesome,
+                        color: Colors.white,
+                        size: 24,
+                      ),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -707,398 +810,429 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
         tabs: const [
           Tab(text: 'Réalisables'),
           Tab(text: 'Toutes'),
-          Tab(text: 'Favorites'),
+          Tab(text: 'Favoris'),
         ],
       ),
     );
   }
 
-  // ✅ DIALOG DE SUGGESTION IA
   void _showSuggestedRecipeDialog(Map<String, dynamic> suggestion) {
     showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (context) => DraggableScrollableSheet(
-            initialChildSize: 0.85,
-            minChildSize: 0.5,
-            maxChildSize: 0.95,
-            builder: (context, scrollController) => Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                  children: [
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
               Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.outline,
-                      borderRadius: BorderRadius.circular(2),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.outline,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Theme.of(context).colorScheme.primary,
-                              Theme.of(context).colorScheme.secondary,
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Theme.of(context).colorScheme.primary,
+                                Theme.of(context).colorScheme.secondary,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.auto_awesome,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Suggestion intelligente',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              Text(
+                                suggestion['title'] ?? 'Recette suggérée',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyLarge?.color,
+                                ),
+                              ),
                             ],
                           ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.bookmark_add_outlined),
+                          onPressed: () => _saveSuggestedRecipe(suggestion),
+                          tooltip: 'Sauvegarder',
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _discoverRecipe();
+                          },
+                          tooltip: 'Nouvelle suggestion',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(24),
+                  children: [
+                    if (suggestion['match_percentage'] != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.auto_awesome, color: Colors.white, size: 24),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.check_circle,
+                              color: Color(0xFF10B981),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${(suggestion['match_percentage'] as num).toInt()}% des ingrédients disponibles',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF10B981),
+                                    ),
+                                  ),
+                                  if (suggestion['available_ingredients'] !=
+                                      null)
+                                    Text(
+                                      '${(suggestion['available_ingredients'] as List).length} ingrédients dans votre frigo',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
+                      const SizedBox(height: 20),
+                    ],
+                    if (suggestion['description'] != null) ...[
+                      Text(
+                        'Description',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).textTheme.bodyLarge?.color,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        suggestion['description'],
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                          height: 1.6,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                    if (suggestion['ingredients'] != null &&
+                        (suggestion['ingredients'] as List).isNotEmpty) ...[
+                      Text(
+                        'Ingrédients',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).textTheme.bodyLarge?.color,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ...(suggestion['ingredients'] as List).map(
+                        (ing) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Icon(
+                                (suggestion['available_ingredients'] as List?)
+                                            ?.contains(ing['name']) ==
+                                        true
+                                    ? Icons.check_circle
+                                    : Icons.circle_outlined,
+                                size: 18,
+                                color:
+                                    (suggestion['available_ingredients']
+                                                as List?)
+                                            ?.contains(ing['name']) ==
+                                        true
+                                    ? const Color(0xFF10B981)
+                                    : Colors.grey,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  '${ing['quantity'] ?? ''} ${ing['unit'] ?? ''} ${ing['name'] ?? ''}'
+                                      .trim(),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium?.color,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                    if (suggestion['steps'] != null) ...[
+                      Text(
+                        'Instructions',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).textTheme.bodyLarge?.color,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        suggestion['steps'],
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                          height: 1.6,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                    if (suggestion['missing_ingredients'] != null &&
+                        (suggestion['missing_ingredients'] as List)
+                            .isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Suggestion intelligente',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey,
-                              ),
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.shopping_cart_outlined,
+                                  color: Color(0xFFF59E0B),
+                                  size: 20,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Ingrédients manquants',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFF59E0B),
+                                  ),
+                                ),
+                              ],
                             ),
-                            Text(
-                              suggestion['title'] ?? 'Recette suggérée',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).textTheme.bodyLarge?.color,
+                            const SizedBox(height: 12),
+                            ...(suggestion['missing_ingredients'] as List).map(
+                              (ing) => Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  '• ${ing['name'] ?? ing}',
+                                  style: const TextStyle(
+                                    color: Color(0xFFF59E0B),
+                                    fontSize: 14,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.bookmark_add_outlined),
-                        onPressed: () => _saveSuggestedRecipe(suggestion),
-                        tooltip: 'Sauvegarder',
-                        color: Theme.of(context).colorScheme.primary,
+                    ],
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -5),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  child: Row(
+                    children: [
+                      // ✅ Bouton "Sauvegarder" seulement
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _saveSuggestedRecipe(suggestion);
+                          },
+                          icon: const Icon(Icons.bookmark_add),
+                          label: const Text('Sauvegarder'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.refresh),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _discoverRecipe();
-                        },
-                        tooltip: 'Nouvelle suggestion',
+                      const SizedBox(width: 12),
+                      // ✅ Bouton "Autre idée"
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _discoverRecipe();
+                          },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Autre idée'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // ✅ Bouton principal : Liste de courses OU Je cuisine
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            Navigator.pop(context);
+
+                            final hasMissingIngredients =
+                                (suggestion['missing_ingredients'] as List?)
+                                    ?.isNotEmpty ==
+                                true;
+
+                            if (hasMissingIngredients) {
+                              await _saveSuggestedRecipe(suggestion);
+                              await _generateShoppingListFromSuggestion(
+                                suggestion,
+                              );
+
+                              if (mounted) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const ShoppingListsPage(),
+                                  ),
+                                );
+                              }
+                            } else {
+                              await _saveSuggestedRecipe(suggestion);
+                              _showSuccess(
+                                'Recette sauvegardée ! Bon appétit ! 🍽️',
+                              );
+                            }
+                          },
+                          icon: Icon(
+                            (suggestion['missing_ingredients'] as List?)
+                                        ?.isNotEmpty ==
+                                    true
+                                ? Icons.shopping_cart_outlined
+                                : Icons.restaurant,
+                          ),
+                          label: Text(
+                            (suggestion['missing_ingredients'] as List?)
+                                        ?.isNotEmpty ==
+                                    true
+                                ? 'Créer liste'
+                                : 'Je cuisine !',
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-            Expanded(
-              child: ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.all(24),
-                children: [
-                  if (suggestion['match_percentage'] != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.check_circle, color: Color(0xFF10B981)),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${(suggestion['match_percentage'] as num).toInt()}% des ingrédients disponibles',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF10B981),
-                                  ),
-                                ),
-                                if (suggestion['available_ingredients'] != null)
-                                  Text(
-                                    '${(suggestion['available_ingredients'] as List).length} ingrédients dans votre frigo',
-                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                  if (suggestion['description'] != null) ...[
-                    Text(
-                      'Description',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      suggestion['description'],
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(context).textTheme.bodyMedium?.color,
-                        height: 1.6,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                  if (suggestion['ingredients'] != null && (suggestion['ingredients'] as List).isNotEmpty) ...[
-                    Text(
-                      'Ingrédients',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ...(suggestion['ingredients'] as List).map(
-                          (ing) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          children: [
-                            Icon(
-                              (suggestion['available_ingredients'] as List?)?.contains(ing['name']) == true
-                                  ? Icons.check_circle
-                                  : Icons.circle_outlined,
-                              size: 18,
-                              color: (suggestion['available_ingredients'] as List?)?.contains(ing['name']) == true
-                                  ? const Color(0xFF10B981)
-                                  : Colors.grey,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                '${ing['quantity'] ?? ''} ${ing['unit'] ?? ''} ${ing['name'] ?? ''}'.trim(),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Theme.of(context).textTheme.bodyMedium?.color,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                  if (suggestion['steps'] != null) ...[
-                    Text(
-                      'Instructions',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      suggestion['steps'],
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(context).textTheme.bodyMedium?.color,
-                        height: 1.6,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                  if (suggestion['missing_ingredients'] != null && (suggestion['missing_ingredients'] as List).isNotEmpty) ...[
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.shopping_cart_outlined, color: Color(0xFFF59E0B), size: 20),
-                              SizedBox(width: 8),
-                              Text(
-                                'Ingrédients manquants',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFFF59E0B),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          ...(suggestion['missing_ingredients'] as List).map(
-                                (ing) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text(
-                                '• ${ing['name'] ?? ing}',
-                                style: const TextStyle(
-                                  color: Color(0xFFF59E0B),
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, -5),
-                          ),
-                        ],
-                      ),
-                      child: SafeArea(
-                        child: Row(
-                          children: [
-                            // ✅ Bouton "Sauvegarder" seulement
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  _saveSuggestedRecipe(suggestion);
-                                },
-                                icon: const Icon(Icons.bookmark_add),
-                                label: const Text('Sauvegarder'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // ✅ Bouton "Autre idée"
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  _discoverRecipe();
-                                },
-                                icon: const Icon(Icons.refresh),
-                                label: const Text('Autre idée'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // ✅ Bouton principal : Liste de courses OU Je cuisine
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () async {
-                                  Navigator.pop(context);
-
-                                  final hasMissingIngredients =
-                                      (suggestion['missing_ingredients'] as List?)?.isNotEmpty == true;
-
-                                  if (hasMissingIngredients) {
-                                    // ✅ NOUVEAU FLUX : Sauvegarder la recette + créer liste liée
-                                    await _generateShoppingListFromSuggestion(suggestion);
-
-                                    // Naviguer vers les listes de courses
-                                    if (mounted) {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => const ShoppingListsPage(),
-                                        ),
-                                      );
-                                    }
-                                  } else {
-                                    // Pas d'ingrédients manquants : juste sauvegarder
-                                    await _saveSuggestedRecipe(suggestion);
-                                    _showSuccess('Recette sauvegardée ! Bon appétit ! 🍽️');
-                                  }
-                                },
-                                icon: Icon(
-                                  (suggestion['missing_ingredients'] as List?)?.isNotEmpty == true
-                                      ? Icons.shopping_cart_outlined
-                                      : Icons.restaurant,
-                                ),
-                                label: Text(
-                                  (suggestion['missing_ingredients'] as List?)?.isNotEmpty == true
-                                      ? 'Créer liste'
-                                      : 'Je cuisine !',
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-              ),
-            ),
+            ],
+          ),
         ),
+      ),
     );
   }
 
-  // Dans recipes.dart - Remplacez _buildRecipeCard par cette version corrigée :
-
   Widget _buildRecipeCard(
-      Map<String, dynamic> recipe, {
-        bool? canMake,
-        double? matchPercentage,
-        List<dynamic>? missingIngredients,
-        String? shoppingListStatus,
-        int? shoppingListId,
-        bool? ingredientsComplete,
-        double? combinedPercentage,
-        int? purchasedMissingCount,
-        int? totalMissingCount,
-      }) {
+    Map<String, dynamic> recipe, {
+    bool? canMake,
+    double? matchPercentage,
+    List<dynamic>? missingIngredients,
+    String? shoppingListStatus,
+    int? shoppingListId,
+    bool? ingredientsComplete,
+    double? combinedPercentage,
+    int? purchasedMissingCount,
+    int? totalMissingCount,
+  }) {
     final recipeId = recipe['id'] as int;
     final isFavorite = _favoriteRecipeIds.contains(recipeId);
 
-    // ✅ LOGIQUE CORRIGÉE : Déterminer le statut global
-    // - isComplete si tout est dans le frigo (canMake)
-    // - OU si ingredientsComplete est true (frigo + courses complétées)
-    // - OU si la liste de courses est "completed"
-    final bool isComplete = canMake == true ||
+    final bool isComplete =
+        canMake == true ||
         ingredientsComplete == true ||
         shoppingListStatus == 'completed';
 
-    // ✅ Pourcentage à afficher
     final double displayPercentage = isComplete
         ? 100.0
         : (combinedPercentage ?? matchPercentage ?? 0);
@@ -1124,13 +1258,12 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
             missingIngredients: missingIngredients,
             shoppingListStatus: shoppingListStatus,
             shoppingListId: shoppingListId,
-            ingredientsComplete: isComplete,  // ✅ Passer le statut calculé
+            ingredientsComplete: isComplete,
             combinedPercentage: displayPercentage,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header avec image
               Stack(
                 children: [
                   Container(
@@ -1140,27 +1273,31 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: isComplete
-                            ? [
-                          const Color(0xFF10B981),
-                          const Color(0xFF059669),
-                        ]
+                            ? [const Color(0xFF10B981), const Color(0xFF059669)]
                             : [
-                          Theme.of(context).colorScheme.primary.withOpacity(0.8),
-                          Theme.of(context).colorScheme.secondary.withOpacity(0.8),
-                        ],
+                                Theme.of(
+                                  context,
+                                ).colorScheme.primary.withOpacity(0.8),
+                                Theme.of(
+                                  context,
+                                ).colorScheme.secondary.withOpacity(0.8),
+                              ],
                       ),
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(20),
+                      ),
                     ),
                     child: Center(
                       child: Icon(
-                        isComplete ? Icons.check_circle_outline : Icons.restaurant,
+                        isComplete
+                            ? Icons.check_circle_outline
+                            : Icons.restaurant,
                         size: 64,
                         color: Colors.white.withOpacity(0.5),
                       ),
                     ),
                   ),
 
-                  // Badge favori
                   Positioned(
                     top: 12,
                     right: 12,
@@ -1174,19 +1311,23 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                         ),
                         child: Icon(
                           isFavorite ? Icons.favorite : Icons.favorite_border,
-                          color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
+                          color: isFavorite
+                              ? Colors.red
+                              : Theme.of(context).iconTheme.color,
                           size: 20,
                         ),
                       ),
                     ),
                   ),
 
-                  // ✅ Badge principal - Adapté selon le statut
                   Positioned(
                     top: 12,
                     left: 12,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: isComplete
                             ? const Color(0xFF10B981)
@@ -1205,7 +1346,9 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                         children: [
                           Icon(
                             isComplete ? Icons.check_circle : Icons.pie_chart,
-                            color: isComplete ? Colors.white : Theme.of(context).colorScheme.primary,
+                            color: isComplete
+                                ? Colors.white
+                                : Theme.of(context).colorScheme.primary,
                             size: 16,
                           ),
                           const SizedBox(width: 6),
@@ -1214,7 +1357,9 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                                 ? 'Ingrédients complets !'
                                 : '${displayPercentage.toInt()}% prêt',
                             style: TextStyle(
-                              color: isComplete ? Colors.white : Theme.of(context).colorScheme.primary,
+                              color: isComplete
+                                  ? Colors.white
+                                  : Theme.of(context).colorScheme.primary,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
@@ -1226,7 +1371,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                 ],
               ),
 
-              // Contenu
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -1257,19 +1401,23 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
 
                     const SizedBox(height: 12),
 
-                    // Infos temps / difficulté
                     Row(
                       children: [
                         if (recipe['preparation_time'] != null) ...[
-                          _buildInfoChip(Icons.schedule_outlined, '${recipe['preparation_time']} min'),
+                          _buildInfoChip(
+                            Icons.schedule_outlined,
+                            '${recipe['preparation_time']} min',
+                          ),
                           const SizedBox(width: 8),
                         ],
                         if (recipe['difficulty'] != null)
-                          _buildInfoChip(Icons.signal_cellular_alt, recipe['difficulty']),
+                          _buildInfoChip(
+                            Icons.signal_cellular_alt,
+                            recipe['difficulty'],
+                          ),
                       ],
                     ),
 
-                    // ✅ Barre de progression (seulement si pas complet)
                     if (!isComplete) ...[
                       const SizedBox(height: 16),
                       _buildCombinedProgressBar(
@@ -1280,7 +1428,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                       ),
                     ],
 
-                    // ✅ Message "Ingrédients complets" avec contexte
                     if (isComplete) ...[
                       const SizedBox(height: 12),
                       Container(
@@ -1291,11 +1438,14 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.celebration, color: Color(0xFF059669), size: 20),
+                            const Icon(
+                              Icons.celebration,
+                              color: Color(0xFF059669),
+                              size: 20,
+                            ),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                // ✅ Message adapté selon la source
                                 canMake == true
                                     ? 'Tout est dans votre frigo !'
                                     : shoppingListStatus == 'completed'
@@ -1313,13 +1463,11 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                       ),
                     ],
 
-                    // ✅ Statut des courses (si pas complet ET liste existe)
                     if (!isComplete && shoppingListStatus != null) ...[
                       const SizedBox(height: 10),
                       _buildShoppingListStatusChip(shoppingListStatus),
                     ],
 
-                    // ✅ Ingrédients manquants (si pas complet ET pas de liste OU liste non complète)
                     if (!isComplete &&
                         missingIngredients != null &&
                         missingIngredients.isNotEmpty &&
@@ -1333,7 +1481,11 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.shopping_basket_outlined, color: Color(0xFFF59E0B), size: 16),
+                            const Icon(
+                              Icons.shopping_basket_outlined,
+                              color: Color(0xFFF59E0B),
+                              size: 16,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -1370,10 +1522,8 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Barre de progression
         Stack(
           children: [
-            // Fond
             Container(
               height: 8,
               decoration: BoxDecoration(
@@ -1381,7 +1531,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
-            // Progression combinée (frigo + courses)
             FractionallySizedBox(
               widthFactor: combinedPercentage / 100,
               child: Container(
@@ -1397,20 +1546,17 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                 ),
               ),
             ),
-            // Séparateur (limite frigo)
             if (fridgePercentage < combinedPercentage)
               Positioned(
-                left: (fridgePercentage / 100) * MediaQuery.of(context).size.width * 0.85,
-                child: Container(
-                  width: 2,
-                  height: 8,
-                  color: Colors.white,
-                ),
+                left:
+                    (fridgePercentage / 100) *
+                    MediaQuery.of(context).size.width *
+                    0.85,
+                child: Container(width: 2, height: 8, color: Colors.white),
               ),
           ],
         ),
         const SizedBox(height: 6),
-        // Légende
         Row(
           children: [
             Container(
@@ -1532,19 +1678,16 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     );
   }
 
-  // Remplacez la signature de _showRecipeDetails par celle-ci :
-
   void _showRecipeDetails(
-      Map<String, dynamic> recipe, {
-        List<dynamic>? missingIngredients,
-        String? shoppingListStatus,
-        int? shoppingListId,
-        bool? ingredientsComplete,      // ✅ AJOUTÉ
-        double? combinedPercentage,     // ✅ AJOUTÉ
-      }) {
+    Map<String, dynamic> recipe, {
+    List<dynamic>? missingIngredients,
+    String? shoppingListStatus,
+    int? shoppingListId,
+    bool? ingredientsComplete,
+    double? combinedPercentage,
+  }) {
     final recipeId = recipe['id'] as int;
 
-    // ✅ Utiliser les nouveaux paramètres pour afficher le statut
     final bool isComplete = ingredientsComplete == true;
 
     showModalBottomSheet(
@@ -1562,11 +1705,12 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
             builder: (context, scrollController) => Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
               ),
               child: Column(
                 children: [
-                  // Header
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -1590,14 +1734,20 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                                 style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyLarge?.color,
                                 ),
                               ),
                             ),
                             IconButton(
                               icon: Icon(
-                                isFavorite ? Icons.favorite : Icons.favorite_border,
-                                color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
+                                isFavorite
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                color: isFavorite
+                                    ? Colors.red
+                                    : Theme.of(context).iconTheme.color,
                               ),
                               onPressed: () {
                                 _toggleFavorite(recipe);
@@ -1610,35 +1760,42 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                     ),
                   ),
 
-                  // Contenu scrollable
                   Expanded(
                     child: ListView(
                       controller: scrollController,
                       padding: const EdgeInsets.all(24),
                       children: [
-                        // ✅ NOUVEAU : Badge "Ingrédients complets"
                         if (isComplete) ...[
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: const Color(0xFFD1FAE5),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                              border: Border.all(
+                                color: const Color(0xFF10B981).withOpacity(0.3),
+                              ),
                             ),
                             child: Row(
                               children: [
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF10B981).withOpacity(0.2),
+                                    color: const Color(
+                                      0xFF10B981,
+                                    ).withOpacity(0.2),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(Icons.celebration, color: Color(0xFF10B981), size: 24),
+                                  child: const Icon(
+                                    Icons.celebration,
+                                    color: Color(0xFF10B981),
+                                    size: 24,
+                                  ),
                                 ),
                                 const SizedBox(width: 16),
                                 const Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         'Prêt à cuisiner !',
@@ -1665,26 +1822,27 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                           const SizedBox(height: 20),
                         ],
 
-                        // ✅ SECTION 1 : Statut de la liste de courses
                         if (shoppingListStatus != null && !isComplete) ...[
                           _buildShoppingStatusSection(shoppingListStatus),
                           const SizedBox(height: 20),
                         ],
 
-                        // ✅ SECTION 2 : Ingrédients manquants (seulement si pas complet)
-                        if (!isComplete && missingIngredients != null && missingIngredients.isNotEmpty) ...[
+                        if (!isComplete &&
+                            missingIngredients != null &&
+                            missingIngredients.isNotEmpty) ...[
                           _buildMissingIngredientsSection(missingIngredients),
                           const SizedBox(height: 20),
                         ],
 
-                        // Description
                         if (recipe['description'] != null) ...[
                           Text(
                             'Description',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Theme.of(context).textTheme.bodyLarge?.color,
+                              color: Theme.of(
+                                context,
+                              ).textTheme.bodyLarge?.color,
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -1692,14 +1850,15 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                             recipe['description'],
                             style: TextStyle(
                               fontSize: 15,
-                              color: Theme.of(context).textTheme.bodyMedium?.color,
+                              color: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.color,
                               height: 1.6,
                             ),
                           ),
                           const SizedBox(height: 24),
                         ],
 
-                        // Instructions
                         Text(
                           'Instructions',
                           style: TextStyle(
@@ -1713,7 +1872,9 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                           recipe['steps'] ?? 'Pas d\'instructions disponibles',
                           style: TextStyle(
                             fontSize: 14,
-                            color: Theme.of(context).textTheme.bodyMedium?.color,
+                            color: Theme.of(
+                              context,
+                            ).textTheme.bodyMedium?.color,
                             height: 1.6,
                           ),
                         ),
@@ -1721,7 +1882,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                     ),
                   ),
 
-                  // Footer avec boutons
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -1737,9 +1897,7 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                     child: SafeArea(
                       child: Row(
                         children: [
-                          // ✅ Bouton adapté selon le statut
                           if (isComplete) ...[
-                            // Recette complète : bouton "Je cuisine"
                             Expanded(
                               child: ElevatedButton.icon(
                                 onPressed: () {
@@ -1751,7 +1909,9 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF10B981),
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
@@ -1759,36 +1919,39 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                                 ),
                               ),
                             ),
-                          ] else if (missingIngredients != null && missingIngredients.isNotEmpty) ...[
-                            // Ingrédients manquants : bouton liste de courses
+                          ] else if (missingIngredients != null &&
+                              missingIngredients.isNotEmpty) ...[
                             Expanded(
                               child: ElevatedButton.icon(
                                 onPressed: shoppingListStatus != null
                                     ? () {
-                                  Navigator.pop(context);
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => const ShoppingListsPage(),
-                                    ),
-                                  );
-                                }
+                                        Navigator.pop(context);
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const ShoppingListsPage(),
+                                          ),
+                                        );
+                                      }
                                     : () {
-                                  Navigator.pop(context);
-                                  _generateShoppingList(recipe);
-                                },
+                                        Navigator.pop(context);
+                                        _generateShoppingList(recipe);
+                                      },
                                 icon: Icon(
-                                  shoppingListStatus != null
+                                  shoppingListId != null
                                       ? Icons.visibility
                                       : Icons.add_shopping_cart,
                                 ),
                                 label: Text(
-                                  shoppingListStatus != null
+                                  shoppingListId != null
                                       ? 'Voir la liste'
                                       : 'Créer liste de courses',
                                 ),
                                 style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
@@ -1797,7 +1960,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                               ),
                             ),
                           ] else ...[
-                            // Cas par défaut
                             Expanded(
                               child: ElevatedButton.icon(
                                 onPressed: () {
@@ -1809,7 +1971,9 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF10B981),
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
@@ -1914,7 +2078,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
     );
   }
 
-
   Widget _buildMissingIngredientsSection(List<dynamic> missingIngredients) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1974,11 +2137,16 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
             children: missingIngredients.take(6).map((ing) {
               final name = ing['product_name'] ?? ing['name'] ?? 'Ingrédient';
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.5)),
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withOpacity(0.5),
+                  ),
                 ),
                 child: Text(
                   name,
@@ -2031,7 +2199,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
         itemBuilder: (context, index) {
           final item = _feasibleRecipes[index];
 
-          // ✅ DEBUG : Afficher la structure des données
           if (kDebugMode && index == 0) {
             print('🔍 Structure item: ${item.keys.toList()}');
             print('🔍 recipe type: ${item['recipe'].runtimeType}');
@@ -2042,28 +2209,30 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
             print('🔍 combined_percentage: ${item['combined_percentage']}');
           }
 
-          // ✅ Le backend retourne "recipe" comme objet imbriqué
           final recipe = item['recipe'] as Map<String, dynamic>;
 
-          // Données de faisabilité
           final canMake = item['can_make'] as bool? ?? false;
           final matchPercentage = _toDouble(item['match_percentage']);
-          final missingIngredients = item['missing_ingredients'] as List<dynamic>? ?? [];
+          final missingIngredients =
+              item['missing_ingredients'] as List<dynamic>? ?? [];
 
-          // Infos liste de courses
           final shoppingListStatus = item['shopping_list_status'] as String?;
           final shoppingListId = item['shopping_list_id'] as int?;
 
-          // Statut combiné - ✅ avec valeurs par défaut correctes
-          final ingredientsComplete = item['ingredients_complete'] as bool? ?? canMake;
+          final ingredientsComplete =
+              item['ingredients_complete'] as bool? ?? canMake;
           final combinedPercentage = _toDouble(item['combined_percentage']) > 0
               ? _toDouble(item['combined_percentage'])
               : matchPercentage;
-          final purchasedMissingCount = item['purchased_missing_count'] as int? ?? 0;
-          final totalMissingCount = item['total_missing_count'] as int? ?? missingIngredients.length;
+          final purchasedMissingCount =
+              item['purchased_missing_count'] as int? ?? 0;
+          final totalMissingCount =
+              item['total_missing_count'] as int? ?? missingIngredients.length;
 
           if (kDebugMode) {
-            print('📊 ${recipe['title']}: complete=$ingredientsComplete, combined=$combinedPercentage%, status=$shoppingListStatus');
+            print(
+              '📊 ${recipe['title']}: complete=$ingredientsComplete, combined=$combinedPercentage%, status=$shoppingListStatus',
+            );
           }
 
           return _buildRecipeCard(
@@ -2104,11 +2273,11 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _allRecipes.length,
-        itemBuilder: (context, index) => _buildSimpleRecipeCard(_allRecipes[index]),
+        itemBuilder: (context, index) =>
+            _buildSimpleRecipeCard(_allRecipes[index]),
       ),
     );
   }
-
 
   Widget _buildFavoriteRecipes() {
     if (_favoriteRecipes.isEmpty) {
@@ -2123,11 +2292,11 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _favoriteRecipes.length,
-        itemBuilder: (context, index) => _buildSimpleRecipeCard(_favoriteRecipes[index]),
+        itemBuilder: (context, index) =>
+            _buildSimpleRecipeCard(_favoriteRecipes[index]),
       ),
     );
   }
-
 
   Widget _buildSimpleRecipeCard(Map<String, dynamic> recipe) {
     final recipeId = recipe['id'] as int;
@@ -2148,7 +2317,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header avec image
               Stack(
                 children: [
                   Container(
@@ -2158,11 +2326,17 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          Theme.of(context).colorScheme.primary.withOpacity(0.8),
-                          Theme.of(context).colorScheme.secondary.withOpacity(0.8),
+                          Theme.of(
+                            context,
+                          ).colorScheme.primary.withOpacity(0.8),
+                          Theme.of(
+                            context,
+                          ).colorScheme.secondary.withOpacity(0.8),
                         ],
                       ),
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(20),
+                      ),
                     ),
                     child: Center(
                       child: Icon(
@@ -2172,7 +2346,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                       ),
                     ),
                   ),
-                  // Badge favori
                   Positioned(
                     top: 12,
                     right: 12,
@@ -2186,7 +2359,9 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                         ),
                         child: Icon(
                           isFavorite ? Icons.favorite : Icons.favorite_border,
-                          color: isFavorite ? Colors.red : Theme.of(context).iconTheme.color,
+                          color: isFavorite
+                              ? Colors.red
+                              : Theme.of(context).iconTheme.color,
                           size: 20,
                         ),
                       ),
@@ -2194,7 +2369,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                   ),
                 ],
               ),
-              // Contenu
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -2222,15 +2396,20 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
                       ),
                     ],
                     const SizedBox(height: 12),
-                    // Infos temps / difficulté
                     Row(
                       children: [
                         if (recipe['preparation_time'] != null) ...[
-                          _buildInfoChip(Icons.schedule_outlined, '${recipe['preparation_time']} min'),
+                          _buildInfoChip(
+                            Icons.schedule_outlined,
+                            '${recipe['preparation_time']} min',
+                          ),
                           const SizedBox(width: 8),
                         ],
                         if (recipe['difficulty'] != null)
-                          _buildInfoChip(Icons.signal_cellular_alt, recipe['difficulty']),
+                          _buildInfoChip(
+                            Icons.signal_cellular_alt,
+                            recipe['difficulty'],
+                          ),
                       ],
                     ),
                   ],
@@ -2242,7 +2421,6 @@ class _RecipesPageState extends State<RecipesPage> with SingleTickerProviderStat
       ),
     );
   }
-
 
   Widget _buildEmptyState(IconData icon, String title, String subtitle) {
     return Center(

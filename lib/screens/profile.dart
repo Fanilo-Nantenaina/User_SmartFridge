@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:user_smartfridge/main.dart';
 import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/screens/notification_settings.dart';
 import 'package:user_smartfridge/service/api.dart';
@@ -39,12 +38,13 @@ class _ProfilePageState extends State<ProfilePage> {
     } catch (e) {
       setState(() => _isLoading = false);
 
-      if (e.toString().contains('Non autorisé') || e.toString().contains('401')) {
+      if (e.toString().contains('Non autorisé') ||
+          e.toString().contains('401')) {
         await _api.logout();
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => const LoginPage()),
-                (route) => false,
+            (route) => false,
           );
         }
       } else {
@@ -72,31 +72,31 @@ class _ProfilePageState extends State<ProfilePage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-        onRefresh: _loadData,
-        child: CustomScrollView(
-          slivers: [
-            _buildAppBar(),
-            SliverToBoxAdapter(
-              child: Column(
-                children: [
-                  _buildProfileHeader(),
-                  const SizedBox(height: 16),
-                  _buildStatsCards(),
-                  const SizedBox(height: 16),
-                  _buildInfoSection(),
-                  const SizedBox(height: 16),
-                  _buildPreferencesSection(),
-                  const SizedBox(height: 16),
-                  _buildSettingsSection(),
-                  const SizedBox(height: 16),
-                  _buildDangerZone(),
-                  const SizedBox(height: 32),
+              onRefresh: _loadData,
+              child: CustomScrollView(
+                slivers: [
+                  _buildAppBar(),
+                  SliverToBoxAdapter(
+                    child: Column(
+                      children: [
+                        _buildProfileHeader(),
+                        const SizedBox(height: 16),
+                        _buildStatsCards(),
+                        const SizedBox(height: 16),
+                        _buildInfoSection(),
+                        const SizedBox(height: 16),
+                        _buildPreferencesSection(),
+                        const SizedBox(height: 16),
+                        _buildSettingsSection(),
+                        const SizedBox(height: 16),
+                        _buildDangerZone(),
+                        const SizedBox(height: 32),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -115,7 +115,10 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
       actions: [
         IconButton(
-          icon: Icon(Icons.edit_outlined, color: Theme.of(context).iconTheme.color),
+          icon: Icon(
+            Icons.edit_outlined,
+            color: Theme.of(context).iconTheme.color,
+          ),
           onPressed: _showEditProfileDialog,
         ),
       ],
@@ -177,10 +180,7 @@ class _ProfilePageState extends State<ProfilePage> {
           const SizedBox(height: 4),
           Text(
             _user?['email'] ?? '',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
         ],
       ),
@@ -223,7 +223,12 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -327,7 +332,8 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildPreferencesSection() {
-    final restrictions = (_user?['dietary_restrictions'] as List<dynamic>?) ?? [];
+    final restrictions =
+        (_user?['dietary_restrictions'] as List<dynamic>?) ?? [];
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -353,7 +359,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.add_circle_outline, color: Theme.of(context).colorScheme.primary),
+                  icon: Icon(
+                    Icons.add_circle_outline,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                   onPressed: _showAddRestrictionDialog,
                 ),
               ],
@@ -364,28 +373,32 @@ class _ProfilePageState extends State<ProfilePage> {
             padding: const EdgeInsets.all(20),
             child: restrictions.isEmpty
                 ? Text(
-              'Aucune restriction alimentaire',
-              style: TextStyle(
-                color: Theme.of(context).textTheme.bodyMedium?.color,
-                fontStyle: FontStyle.italic,
-              ),
-            )
+                    'Aucune restriction alimentaire',
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  )
                 : Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: restrictions
-                  .map((r) => Chip(
-                label: Text(r.toString()),
-                backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                labelStyle: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.w500,
-                ),
-                deleteIcon: const Icon(Icons.close, size: 18),
-                onDeleted: () => _removeRestriction(r.toString()),
-              ))
-                  .toList(),
-            ),
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: restrictions
+                        .map(
+                          (r) => Chip(
+                            label: Text(r.toString()),
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary.withOpacity(0.1),
+                            labelStyle: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            deleteIcon: const Icon(Icons.close, size: 18),
+                            onDeleted: () => _removeRestriction(r.toString()),
+                          ),
+                        )
+                        .toList(),
+                  ),
           ),
         ],
       ),
@@ -403,12 +416,16 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Column(
         children: [
           _buildThemeSwitch(),
-          Divider(height: 1, indent: 68, color: Theme.of(context).colorScheme.outline),
+          Divider(
+            height: 1,
+            indent: 68,
+            color: Theme.of(context).colorScheme.outline,
+          ),
           _buildSettingsTile(
             Icons.notifications_outlined,
             'Notifications',
             'Son, vibration, alertes',
-                () {
+            () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -423,26 +440,38 @@ class _ProfilePageState extends State<ProfilePage> {
             'Nom, email, photo',
             _showEditProfileDialog,
           ),
-          Divider(height: 1, indent: 68, color: Theme.of(context).colorScheme.outline),
+          Divider(
+            height: 1,
+            indent: 68,
+            color: Theme.of(context).colorScheme.outline,
+          ),
           _buildSettingsTile(
             Icons.restaurant_outlined,
             'Cuisine préférée',
             _user?['preferred_cuisine'] ?? 'Non définie',
             _showEditCuisineDialog,
           ),
-          Divider(height: 1, indent: 68, color: Theme.of(context).colorScheme.outline),
+          Divider(
+            height: 1,
+            indent: 68,
+            color: Theme.of(context).colorScheme.outline,
+          ),
           _buildSettingsTile(
             Icons.access_time_outlined,
             'Fuseau horaire',
             _user?['timezone'] ?? 'UTC',
             _showEditTimezoneDialog,
           ),
-          Divider(height: 1, indent: 68, color: Theme.of(context).colorScheme.outline),
+          Divider(
+            height: 1,
+            indent: 68,
+            color: Theme.of(context).colorScheme.outline,
+          ),
           _buildSettingsTile(
             Icons.info_outline,
             'À propos',
             'Version 1.0.0',
-                () {
+            () {
               showAboutDialog(
                 context: context,
                 applicationName: 'Smart Fridge',
@@ -457,11 +486,11 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildSettingsTile(
-      IconData icon,
-      String title,
-      String subtitle,
-      VoidCallback onTap,
-      ) {
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap,
+  ) {
     return ListTile(
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -508,7 +537,10 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           ListTile(
             onTap: _handleLogout,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 8,
+            ),
             leading: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
@@ -554,7 +586,10 @@ class _ProfilePageState extends State<ProfilePage> {
       listenable: themeService,
       builder: (context, child) {
         return SwitchListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 8,
+          ),
           secondary: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
@@ -585,7 +620,10 @@ class _ProfilePageState extends State<ProfilePage> {
             Theme.of(context).brightness == Brightness.dark
                 ? 'Thème sombre activé'
                 : 'Thème clair activé',
-            style: TextStyle(fontSize: 12, color: Theme.of(context).textTheme.bodyMedium?.color),
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).textTheme.bodyMedium?.color,
+            ),
           ),
           value: themeService.themeMode == ThemeMode.dark,
           onChanged: (value) async {
@@ -607,17 +645,24 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: Theme.of(context).cardColor,
-        title: Text('Modifier le profil', style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+        title: Text(
+          'Modifier le profil',
+          style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
               decoration: InputDecoration(
                 labelText: 'Nom',
                 prefixIcon: const Icon(Icons.person_outline),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],
@@ -647,7 +692,14 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _showEditCuisineDialog() async {
-    final cuisines = ['Française', 'Italienne', 'Asiatique', 'Méditerranéenne', 'Mexicaine', 'Autre'];
+    final cuisines = [
+      'Française',
+      'Italienne',
+      'Asiatique',
+      'Méditerranéenne',
+      'Mexicaine',
+      'Autre',
+    ];
     String? selected = _user?['preferred_cuisine'];
 
     await showDialog(
@@ -655,31 +707,49 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: Theme.of(context).cardColor,
-        title: Text('Cuisine préférée', style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+        title: Text(
+          'Cuisine préférée',
+          style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          children: cuisines.map((cuisine) => RadioListTile<String>(
-            title: Text(cuisine, style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
-            value: cuisine,
-            groupValue: selected,
-            onChanged: (value) async {
-              try {
-                await _api.updateUser(preferredCuisine: value);
-                Navigator.pop(context);
-                _showSuccess('Cuisine mise à jour');
-                _loadData();
-              } catch (e) {
-                _showError('Erreur: $e');
-              }
-            },
-          )).toList(),
+          children: cuisines
+              .map(
+                (cuisine) => RadioListTile<String>(
+                  title: Text(
+                    cuisine,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                    ),
+                  ),
+                  value: cuisine,
+                  groupValue: selected,
+                  onChanged: (value) async {
+                    try {
+                      await _api.updateUser(preferredCuisine: value);
+                      Navigator.pop(context);
+                      _showSuccess('Cuisine mise à jour');
+                      _loadData();
+                    } catch (e) {
+                      _showError('Erreur: $e');
+                    }
+                  },
+                ),
+              )
+              .toList(),
         ),
       ),
     );
   }
 
   Future<void> _showEditTimezoneDialog() async {
-    final timezones = ['UTC', 'Europe/Paris', 'America/New_York', 'Asia/Tokyo', 'Australia/Sydney'];
+    final timezones = [
+      'UTC',
+      'Europe/Paris',
+      'America/New_York',
+      'Asia/Tokyo',
+      'Australia/Sydney',
+    ];
     String? selected = _user?['timezone'];
 
     await showDialog(
@@ -687,24 +757,36 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: Theme.of(context).cardColor,
-        title: Text('Fuseau horaire', style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+        title: Text(
+          'Fuseau horaire',
+          style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          children: timezones.map((tz) => RadioListTile<String>(
-            title: Text(tz, style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
-            value: tz,
-            groupValue: selected,
-            onChanged: (value) async {
-              try {
-                await _api.updateUser(timezone: value);
-                Navigator.pop(context);
-                _showSuccess('Fuseau horaire mis à jour');
-                _loadData();
-              } catch (e) {
-                _showError('Erreur: $e');
-              }
-            },
-          )).toList(),
+          children: timezones
+              .map(
+                (tz) => RadioListTile<String>(
+                  title: Text(
+                    tz,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                    ),
+                  ),
+                  value: tz,
+                  groupValue: selected,
+                  onChanged: (value) async {
+                    try {
+                      await _api.updateUser(timezone: value);
+                      Navigator.pop(context);
+                      _showSuccess('Fuseau horaire mis à jour');
+                      _loadData();
+                    } catch (e) {
+                      _showError('Erreur: $e');
+                    }
+                  },
+                ),
+              )
+              .toList(),
         ),
       ),
     );
@@ -712,35 +794,59 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _showAddRestrictionDialog() async {
     final controller = TextEditingController();
-    final commonRestrictions = ['lactose', 'gluten', 'nuts', 'shellfish', 'vegan', 'vegetarian'];
+    final commonRestrictions = [
+      'lactose',
+      'gluten',
+      'nuts',
+      'shellfish',
+      'vegan',
+      'vegetarian',
+    ];
 
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: Theme.of(context).cardColor,
-        title: Text('Ajouter une restriction', style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+        title: Text(
+          'Ajouter une restriction',
+          style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: controller,
-              style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
               decoration: InputDecoration(
                 labelText: 'Restriction',
                 hintText: 'Ex: lactose, gluten',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            Text('Suggestions:', style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge?.color)),
+            Text(
+              'Suggestions:',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).textTheme.bodyLarge?.color,
+              ),
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
-              children: commonRestrictions.map((r) => ActionChip(
-                label: Text(r),
-                onPressed: () => controller.text = r,
-              )).toList(),
+              children: commonRestrictions
+                  .map(
+                    (r) => ActionChip(
+                      label: Text(r),
+                      onPressed: () => controller.text = r,
+                    ),
+                  )
+                  .toList(),
             ),
           ],
         ),
@@ -754,7 +860,9 @@ class _ProfilePageState extends State<ProfilePage> {
               if (controller.text.isEmpty) return;
 
               try {
-                final current = List<String>.from(_user?['dietary_restrictions'] ?? []);
+                final current = List<String>.from(
+                  _user?['dietary_restrictions'] ?? [],
+                );
                 if (!current.contains(controller.text)) {
                   current.add(controller.text);
                   await _api.updateUser(dietaryRestrictions: current);
@@ -792,10 +900,16 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: Theme.of(context).cardColor,
-        title: Text('Déconnexion', style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+        title: Text(
+          'Déconnexion',
+          style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+        ),
         content: Text(
           'Êtes-vous sûr de vouloir vous déconnecter ?',
-          style: TextStyle(height: 1.5, color: Theme.of(context).textTheme.bodyMedium?.color),
+          style: TextStyle(
+            height: 1.5,
+            color: Theme.of(context).textTheme.bodyMedium?.color,
+          ),
         ),
         actions: [
           TextButton(

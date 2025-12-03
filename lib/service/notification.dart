@@ -29,7 +29,7 @@ class NotificationService {
   NotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _localNotifications =
-  FlutterLocalNotificationsPlugin();
+      FlutterLocalNotificationsPlugin();
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
 
   String? _fcmToken;
@@ -96,7 +96,9 @@ class NotificationService {
   }
 
   Future<void> _initializeLocalNotifications() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -130,7 +132,8 @@ class NotificationService {
 
     await _localNotifications
         .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(channel);
   }
 
@@ -150,7 +153,8 @@ class NotificationService {
     if (Platform.isAndroid && Platform.version.contains('13')) {
       await _localNotifications
           .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.requestNotificationsPermission();
     }
   }
@@ -215,10 +219,14 @@ class NotificationService {
       priority: Priority.high,
 
       enableVibration: _vibrationEnabled,
-      vibrationPattern: _vibrationEnabled ? Int64List.fromList([0, 500, 200, 500]) : null,
+      vibrationPattern: _vibrationEnabled
+          ? Int64List.fromList([0, 500, 200, 500])
+          : null,
 
       playSound: _soundEnabled,
-      sound: _soundEnabled ? const RawResourceAndroidNotificationSound('notification') : null,
+      sound: _soundEnabled
+          ? const RawResourceAndroidNotificationSound('notification')
+          : null,
 
       icon: '@mipmap/ic_launcher',
       color: _getColorForAlertType(alertType),

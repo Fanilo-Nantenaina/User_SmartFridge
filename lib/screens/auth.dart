@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:user_smartfridge/main.dart';
 import 'package:user_smartfridge/service/api.dart';
-import 'dashboard.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -28,26 +27,34 @@ class _LoginPageState extends State<LoginPage> {
       final api = ClientApiService();
 
       if (_isRegisterMode) {
-        await api.register(
-          email: _emailController.text,
-          password: _passwordController.text,
-          name: _nameController.text,
-        ).timeout(
-          const Duration(seconds: 15),
-          onTimeout: () {
-            throw Exception('Délai d\'attente dépassé. Vérifiez votre connexion.');
-          },
-        );
+        await api
+            .register(
+              email: _emailController.text,
+              password: _passwordController.text,
+              name: _nameController.text,
+            )
+            .timeout(
+              const Duration(seconds: 15),
+              onTimeout: () {
+                throw Exception(
+                  'Délai d\'attente dépassé. Vérifiez votre connexion.',
+                );
+              },
+            );
       } else {
-        await api.login(
-          email: _emailController.text,
-          password: _passwordController.text,
-        ).timeout(
-          const Duration(seconds: 15),
-          onTimeout: () {
-            throw Exception('Délai d\'attente dépassé. Vérifiez votre connexion.');
-          },
-        );
+        await api
+            .login(
+              email: _emailController.text,
+              password: _passwordController.text,
+            )
+            .timeout(
+              const Duration(seconds: 15),
+              onTimeout: () {
+                throw Exception(
+                  'Délai d\'attente dépassé. Vérifiez votre connexion.',
+                );
+              },
+            );
       }
 
       if (mounted) {
@@ -106,13 +113,17 @@ class _LoginPageState extends State<LoginPage> {
                       gradient: LinearGradient(
                         colors: [
                           Theme.of(context).colorScheme.primary,
-                          Theme.of(context).colorScheme.primary.withOpacity(0.8),
+                          Theme.of(
+                            context,
+                          ).colorScheme.primary.withOpacity(0.8),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withOpacity(0.3),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -152,7 +163,8 @@ class _LoginPageState extends State<LoginPage> {
                     label: 'Email',
                     icon: Icons.email_outlined,
                     keyboardType: TextInputType.emailAddress,
-                    validator: (v) => v?.isEmpty ?? true ? 'Email invalide' : null,
+                    validator: (v) =>
+                        v?.isEmpty ?? true ? 'Email invalide' : null,
                   ),
                   const SizedBox(height: 16),
                   _buildTextField(
@@ -162,12 +174,16 @@ class _LoginPageState extends State<LoginPage> {
                     obscureText: _obscurePassword,
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                        _obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
                         color: Theme.of(context).iconTheme.color,
                       ),
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
                     ),
-                    validator: (v) => v?.isEmpty ?? true ? 'Min. 6 caractères' : null,
+                    validator: (v) =>
+                        v?.isEmpty ?? true ? 'Min. 6 caractères' : null,
                   ),
                   const SizedBox(height: 32),
 
@@ -179,42 +195,55 @@ class _LoginPageState extends State<LoginPage> {
                       onPressed: _isLoading ? null : _submit,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onPrimary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
                         elevation: 0,
-                        disabledBackgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.6),
+                        disabledBackgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.primary.withOpacity(0.6),
                       ),
                       child: _isLoading
                           ? SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Theme.of(context).colorScheme.onPrimary,
-                          ),
-                        ),
-                      )
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Theme.of(context).colorScheme.onPrimary,
+                                ),
+                              ),
+                            )
                           : Text(
-                        _isRegisterMode ? 'Créer mon compte' : 'Se connecter',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                      ),
+                              _isRegisterMode
+                                  ? 'Créer mon compte'
+                                  : 'Se connecter',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 16),
 
                   TextButton(
-                    onPressed: _isLoading ? null : () => setState(() {
-                      _isRegisterMode = !_isRegisterMode;
-                      _formKey.currentState?.reset();
-                    }),
+                    onPressed: _isLoading
+                        ? null
+                        : () => setState(() {
+                            _isRegisterMode = !_isRegisterMode;
+                            _formKey.currentState?.reset();
+                          }),
                     child: Text(
                       _isRegisterMode
                           ? 'Déjà inscrit ? Se connecter'
                           : 'Pas de compte ? S\'inscrire',
-                      style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     ),
                   ),
                 ],
