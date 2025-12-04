@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/screens/shopping_list.dart';
 import 'package:user_smartfridge/service/api.dart';
+import 'package:user_smartfridge/service/fridge.dart';
 import 'package:user_smartfridge/service/realtime.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
@@ -26,10 +27,9 @@ class _InventoryPageState extends State<InventoryPage>
   int? _selectedFridgeId;
   String _searchQuery = '';
   late TabController _tabController;
-  bool _isConnectedRealtime = false;
-  bool _realtimeInitialized = false;
 
-  StreamSubscription<InventoryUpdateEvent>? _realtimeSubscription;
+  final _fridgeService = FridgeService();
+  StreamSubscription<int?>? _fridgeSubscription;
 
   @override
   void initState() {
@@ -37,31 +37,22 @@ class _InventoryPageState extends State<InventoryPage>
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() => _filterInventory());
     _api.onSessionExpired = _handleSessionExpired;
+    _fridgeSubscription = _fridgeService.fridgeStream.listen((fridgeId) {
+      if (fridgeId != null && fridgeId != _selectedFridgeId) {
+        print('📦 InventoryPage: Frigo changé -> $fridgeId');
+        _selectedFridgeId = fridgeId;
+        _loadInventory();
+      }
+    });
+
     _loadInventory();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _checkAndReloadIfNeeded();
-  }
-
-  Future<void> _checkAndReloadIfNeeded() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedFridgeId = prefs.getInt('selected_fridge_id');
-
-    if (savedFridgeId != null &&
-        savedFridgeId != _selectedFridgeId &&
-        !_isLoading) {
-      _loadInventory();
-    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _realtimeSubscription?.cancel();
     _realtimeService?.dispose();
+    _fridgeSubscription?.cancel();
     super.dispose();
   }
 
@@ -97,17 +88,14 @@ class _InventoryPageState extends State<InventoryPage>
         return;
       }
 
-      final prefs = await SharedPreferences.getInstance();
-      int? savedFridgeId = prefs.getInt('selected_fridge_id');
-
-      final previousFridgeId = _selectedFridgeId;
+      int? savedFridgeId = await _fridgeService.getSelectedFridge();
 
       if (savedFridgeId != null &&
           fridges.any((f) => f['id'] == savedFridgeId)) {
         _selectedFridgeId = savedFridgeId;
       } else {
         _selectedFridgeId = fridges[0]['id'];
-        await prefs.setInt('selected_fridge_id', _selectedFridgeId!);
+        await _fridgeService.setSelectedFridge(_selectedFridgeId!);
       }
 
       if (kDebugMode) {
@@ -125,12 +113,6 @@ class _InventoryPageState extends State<InventoryPage>
         _filterInventory();
         _isLoading = false;
       });
-
-      if (initRealtime &&
-          (!_realtimeInitialized || previousFridgeId != _selectedFridgeId)) {
-        _startRealtimeListener();
-        _realtimeInitialized = true;
-      }
     } on SessionExpiredException {
       _handleSessionExpired();
     } catch (e) {
@@ -139,105 +121,6 @@ class _InventoryPageState extends State<InventoryPage>
       }
       _handleError(e);
     }
-  }
-
-  Future<void> _refreshInventoryData() async {
-    if (_selectedFridgeId == null) return;
-
-    try {
-      final inventory = await _api.getInventory(_selectedFridgeId!);
-
-      if (!mounted) return;
-
-      setState(() {
-        _inventory = inventory;
-        _filterInventory();
-      });
-    } catch (e) {
-      if (kDebugMode) print('Error refreshing inventory: $e');
-    }
-  }
-
-  Future<void> _startRealtimeListener() async {
-    if (_selectedFridgeId == null) return;
-
-    await _realtimeSubscription?.cancel();
-    _realtimeService?.dispose();
-
-    try {
-      _realtimeService = RealtimeService.fromApiService(
-        baseUrl: ClientApiService.baseUrl,
-        fridgeId: _selectedFridgeId!,
-        tokenProvider: () => _api.getFreshAccessToken(),
-      );
-
-      _realtimeSubscription = _realtimeService!
-          .listenToInventoryUpdates()
-          .listen(
-            (event) {
-              if (!mounted) return;
-
-              if (kDebugMode) print('📡 Événement reçu: ${event.type}');
-
-              setState(() => _isConnectedRealtime = true);
-
-              if (event.message == "Connexion SSE établie") {
-                return;
-              }
-
-              if (event.type != InventoryUpdateType.updated) {
-                _handleRealtimeEvent(event);
-              }
-
-              _refreshInventoryData();
-            },
-            onError: (error) {
-              if (!mounted) return;
-              if (kDebugMode) print('❌ Erreur temps réel: $error');
-              setState(() => _isConnectedRealtime = false);
-            },
-          );
-    } catch (e) {
-      if (kDebugMode) print('Error starting realtime listener: $e');
-      if (mounted) {
-        setState(() => _isConnectedRealtime = false);
-      }
-    }
-  }
-
-  void _handleRealtimeEvent(InventoryUpdateEvent event) {
-    final icon = switch (event.type) {
-      InventoryUpdateType.added => Icons.add_circle_outline,
-      InventoryUpdateType.consumed => Icons.remove_circle_outline,
-      InventoryUpdateType.removed => Icons.delete_outline,
-      InventoryUpdateType.alert => Icons.warning,
-      InventoryUpdateType.expired => Icons.dangerous,
-      _ => Icons.update,
-    };
-
-    final color = switch (event.type) {
-      InventoryUpdateType.added => Colors.teal,
-      InventoryUpdateType.consumed => Colors.green,
-      InventoryUpdateType.removed => Colors.grey,
-      InventoryUpdateType.alert => Colors.orange,
-      InventoryUpdateType.expired => Colors.red,
-      _ => Colors.blue,
-    };
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(icon, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(child: Text(event.message)),
-          ],
-        ),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   void _filterInventory() {
@@ -415,25 +298,6 @@ class _InventoryPageState extends State<InventoryPage>
                         ),
                       ),
                     ],
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: _isConnectedRealtime
-                            ? Colors.green
-                            : Colors.grey,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _isConnectedRealtime ? 'Temps réel' : 'Hors ligne',
-                      style: TextStyle(
-                        color: Theme.of(context).textTheme.bodySmall?.color,
-                        fontSize: 11,
-                      ),
-                    ),
                   ],
                 ),
               ],

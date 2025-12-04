@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/service/api.dart';
+import 'package:user_smartfridge/service/fridge.dart';
 
 class AlertsPage extends StatefulWidget {
   const AlertsPage({super.key});
@@ -18,27 +21,26 @@ class _AlertsPageState extends State<AlertsPage> {
   String _filter = 'pending';
   int? _selectedFridgeId;
 
+  final _fridgeService = FridgeService();
+  StreamSubscription<int?>? _fridgeSubscription;
+
   @override
   void initState() {
     super.initState();
+
+    _fridgeSubscription = _fridgeService.fridgeStream.listen((fridgeId) {
+      if (fridgeId != null && fridgeId != _selectedFridgeId) {
+        _selectedFridgeId = fridgeId;
+        _loadAlerts();
+      }
+    });
     _loadAlerts();
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _checkAndReloadIfNeeded();
-  }
-
-  Future<void> _checkAndReloadIfNeeded() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedFridgeId = prefs.getInt('selected_fridge_id');
-
-    if (savedFridgeId != null &&
-        savedFridgeId != _selectedFridgeId &&
-        !_isLoading) {
-      _loadAlerts();
-    }
+  void dispose() {
+    _fridgeSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadAlerts() async {
@@ -56,15 +58,14 @@ class _AlertsPageState extends State<AlertsPage> {
         return;
       }
 
-      final prefs = await SharedPreferences.getInstance();
-      int? savedFridgeId = prefs.getInt('selected_fridge_id');
+      int? savedFridgeId = await _fridgeService.getSelectedFridge();
 
       if (savedFridgeId != null &&
           fridges.any((f) => f['id'] == savedFridgeId)) {
         _selectedFridgeId = savedFridgeId;
       } else {
         _selectedFridgeId = fridges[0]['id'];
-        await prefs.setInt('selected_fridge_id', _selectedFridgeId!);
+        await _fridgeService.setSelectedFridge(_selectedFridgeId!);
       }
 
       if (kDebugMode) {

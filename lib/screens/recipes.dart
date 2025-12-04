@@ -1,9 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/screens/shopping_list.dart';
 import 'package:user_smartfridge/service/api.dart';
+import 'package:user_smartfridge/service/fridge.dart';
 
 class RecipesPage extends StatefulWidget {
   const RecipesPage({super.key});
@@ -16,6 +18,9 @@ class _RecipesPageState extends State<RecipesPage>
     with SingleTickerProviderStateMixin {
   final ClientApiService _api = ClientApiService();
   late TabController _tabController;
+
+  final _fridgeService = FridgeService();
+  StreamSubscription<int?>? _fridgeSubscription;
 
   String _currentSort = 'match';
   String _sortOrder = 'desc';
@@ -34,19 +39,129 @@ class _RecipesPageState extends State<RecipesPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+
+    // ✅ CORRECTION : Écoute du stream de changement de frigo
+    _fridgeSubscription = _fridgeService.fridgeStream.listen((fridgeId) {
+      if (fridgeId != null && fridgeId != _selectedFridgeId) {
+        if (kDebugMode) {
+          print('🍳 RecipesPage: Frigo changé via stream -> $fridgeId');
+        }
+        _selectedFridgeId = fridgeId;
+        _loadRecipes(forceRefresh: true); // ✅ Force le rechargement
+      }
+    });
+
     _loadRecipes();
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) _checkAndReloadIfNeeded();
-    });
+  void dispose() {
+    _tabController.dispose();
+    _fridgeSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadRecipes({bool forceRefresh = false}) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final fridges = await _api.getFridges();
+
+      // ✅ Si forceRefresh = true, on utilise directement _selectedFridgeId
+      if (!forceRefresh) {
+        // Comportement normal au premier chargement
+        int? savedFridgeId = await _fridgeService.getSelectedFridge();
+
+        if (savedFridgeId != null &&
+            fridges.any((f) => f['id'] == savedFridgeId)) {
+          _selectedFridgeId = savedFridgeId;
+        } else if (fridges.isNotEmpty) {
+          _selectedFridgeId = fridges[0]['id'];
+          await _fridgeService.setSelectedFridge(_selectedFridgeId!);
+        }
+      } else {
+        // ✅ MODE FORCE : On garde _selectedFridgeId tel quel
+        if (kDebugMode) {
+          print('🔄 Force refresh pour frigo $_selectedFridgeId');
+        }
+
+        // ✅ Vérifier que le frigo existe toujours
+        if (_selectedFridgeId != null &&
+            !fridges.any((f) => f['id'] == _selectedFridgeId)) {
+          if (kDebugMode) {
+            print('⚠️ Frigo $_selectedFridgeId n\'existe plus');
+          }
+          _selectedFridgeId = fridges.isNotEmpty ? fridges[0]['id'] : null;
+        }
+      }
+
+      if (kDebugMode) {
+        print('📊 Chargement des recettes pour frigo $_selectedFridgeId');
+      }
+
+      List<dynamic> allRecipes = [];
+      List<dynamic> feasibleRecipes = [];
+      List<dynamic> favoriteRecipes = [];
+
+      if (_selectedFridgeId != null) {
+        final results = await Future.wait([
+          _api.getRecipes(
+            sortBy: _currentSort == 'match' ? 'date' : _currentSort,
+            sortOrder: _sortOrder,
+          ),
+          _api.getFeasibleRecipes(
+            _selectedFridgeId!,
+            sortBy: _currentSort,
+            sortOrder: _sortOrder,
+          ),
+          _api.getFavoriteRecipes(),
+        ]);
+
+        allRecipes = results[0];
+        feasibleRecipes = results[1];
+        favoriteRecipes = results[2];
+
+        if (kDebugMode) {
+          print('✅ Recettes chargées : ${feasibleRecipes.length} réalisables');
+        }
+      } else {
+        final results = await Future.wait([
+          _api.getRecipes(
+            sortBy: _currentSort == 'match' ? 'date' : _currentSort,
+            sortOrder: _sortOrder,
+          ),
+          _api.getFavoriteRecipes(),
+        ]);
+
+        allRecipes = results[0];
+        favoriteRecipes = results[1];
+        feasibleRecipes = [];
+      }
+
+      final favoriteIds = favoriteRecipes.map((r) => r['id'] as int).toSet();
+
+      if (!mounted) return;
+
+      setState(() {
+        _allRecipes = allRecipes;
+        _feasibleRecipes = feasibleRecipes;
+        _favoriteRecipes = favoriteRecipes;
+        _favoriteRecipeIds = favoriteIds;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showError('Erreur: $e');
+    }
+  }
+
+  void refresh() {
+    _loadRecipes(forceRefresh: true);
   }
 
   void _showSortOptions() {
-    // âœ… DÃ©terminer quelles options sont disponibles selon l'onglet actif
     final bool isOnFeasibleTab = _tabController.index == 0;
 
     showModalBottomSheet(
@@ -72,7 +187,6 @@ class _RecipesPageState extends State<RecipesPage>
             ),
             const SizedBox(height: 20),
 
-            // âœ… "Match" seulement pour l'onglet "RÃ©alisables"
             if (isOnFeasibleTab)
               _buildSortOption(
                 icon: Icons.pie_chart,
@@ -80,7 +194,6 @@ class _RecipesPageState extends State<RecipesPage>
                 value: 'match',
               ),
 
-            // âœ… Options communes Ã  tous les onglets
             _buildSortOption(
               icon: Icons.sort_by_alpha,
               title: 'Nom (A-Z)',
@@ -93,17 +206,16 @@ class _RecipesPageState extends State<RecipesPage>
             ),
             _buildSortOption(
               icon: Icons.schedule,
-              title: 'Temps de prÃ©paration',
+              title: 'Temps de préparation',
               value: 'time',
             ),
 
             const Divider(height: 32),
 
-            // Ordre de tri
             ListTile(
               leading: const Icon(Icons.swap_vert),
               title: Text(
-                'Ordre: ${_sortOrder == 'desc' ? 'DÃ©croissant' : 'Croissant'}',
+                'Ordre: ${_sortOrder == 'desc' ? 'Décroissant' : 'Croissant'}',
               ),
               trailing: Switch(
                 value: _sortOrder == 'desc',
@@ -112,7 +224,7 @@ class _RecipesPageState extends State<RecipesPage>
                     _sortOrder = value ? 'desc' : 'asc';
                   });
                   Navigator.pop(context);
-                  _loadRecipes();
+                  _loadRecipes(forceRefresh: true); // ✅ Force refresh
                 },
               ),
             ),
@@ -137,31 +249,9 @@ class _RecipesPageState extends State<RecipesPage>
       onTap: () {
         setState(() => _currentSort = value);
         Navigator.pop(context);
-        _loadRecipes();
+        _loadRecipes(forceRefresh: true); // ✅ Force refresh
       },
     );
-  }
-
-  Future<void> _checkAndReloadIfNeeded() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedFridgeId = prefs.getInt('selected_fridge_id');
-
-    if (kDebugMode) {
-      print(
-        '🔄 RecipesPage: Checking fridge - saved=$savedFridgeId, current=$_selectedFridgeId',
-      );
-    }
-
-    if (savedFridgeId != _selectedFridgeId) {
-      if (kDebugMode) {
-        print('🔄 RecipesPage: Fridge changed! Reloading...');
-      }
-      _loadRecipes();
-    }
-  }
-
-  void refresh() {
-    _loadRecipes();
   }
 
   Future<void> _saveSuggestedRecipe(Map<String, dynamic> suggestion) async {
@@ -257,7 +347,7 @@ class _RecipesPageState extends State<RecipesPage>
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.pop(context);
-                _loadRecipes();
+                _loadRecipes(forceRefresh: true); // ✅ Force refresh
                 _tabController.animateTo(1);
               },
               icon: const Icon(Icons.visibility),
@@ -271,94 +361,6 @@ class _RecipesPageState extends State<RecipesPage>
       if (!mounted) return;
       Navigator.pop(context);
       _showError('Erreur lors de la sauvegarde: $e');
-    }
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _checkAndReloadIfNeeded();
-    }
-  }
-
-  Future<void> _loadRecipes() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
-
-    try {
-      final fridges = await _api.getFridges();
-      final prefs = await SharedPreferences.getInstance();
-      int? savedFridgeId = prefs.getInt('selected_fridge_id');
-
-      if (fridges.isNotEmpty) {
-        if (savedFridgeId != null &&
-            fridges.any((f) => f['id'] == savedFridgeId)) {
-          _selectedFridgeId = savedFridgeId;
-        } else {
-          _selectedFridgeId = fridges[0]['id'];
-          await prefs.setInt('selected_fridge_id', _selectedFridgeId!);
-        }
-      } else {
-        _selectedFridgeId = null;
-      }
-
-      List<dynamic> allRecipes = [];
-      List<dynamic> feasibleRecipes = [];
-      List<dynamic> favoriteRecipes = [];
-
-      if (_selectedFridgeId != null) {
-        final results = await Future.wait([
-          // âœ… Pour "Toutes" : pas de tri par match
-          _api.getRecipes(
-            sortBy: _currentSort == 'match' ? 'date' : _currentSort,
-            sortOrder: _sortOrder,
-          ),
-          // âœ… Pour "RÃ©alisables" : tri par match autorisÃ©
-          _api.getFeasibleRecipes(
-            _selectedFridgeId!,
-            sortBy: _currentSort,
-            sortOrder: _sortOrder,
-          ),
-          _api.getFavoriteRecipes(),
-        ]);
-
-        allRecipes = results[0];
-        feasibleRecipes = results[1];
-        favoriteRecipes = results[2];
-      } else {
-        final results = await Future.wait([
-          _api.getRecipes(
-            sortBy: _currentSort == 'match' ? 'date' : _currentSort,
-            sortOrder: _sortOrder,
-          ),
-          _api.getFavoriteRecipes(),
-        ]);
-
-        allRecipes = results[0];
-        favoriteRecipes = results[1];
-        feasibleRecipes = [];
-      }
-
-      final favoriteIds = favoriteRecipes.map((r) => r['id'] as int).toSet();
-
-      if (!mounted) return;
-
-      setState(() {
-        _allRecipes = allRecipes;
-        _feasibleRecipes = feasibleRecipes;
-        _favoriteRecipes = favoriteRecipes;
-        _favoriteRecipeIds = favoriteIds;
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      _showError('Erreur: $e');
     }
   }
 
@@ -493,7 +495,7 @@ class _RecipesPageState extends State<RecipesPage>
 
       _showSuccess('Liste créée avec $itemsCount article(s) !');
 
-      _loadRecipes();
+      _loadRecipes(forceRefresh: true); // ✅ Force refresh
     } catch (e) {
       if (!mounted) return;
       Navigator.pop(context);

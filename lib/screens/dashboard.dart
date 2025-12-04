@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/screens/search_inventory.dart';
 import 'package:user_smartfridge/screens/shopping_list.dart';
 import 'package:user_smartfridge/service/api.dart';
+import 'package:user_smartfridge/service/fridge.dart';
 import 'package:user_smartfridge/widgets/fridge_selector.dart';
 import '../main.dart';
 
@@ -21,10 +24,26 @@ class _DashboardPageState extends State<DashboardPage> {
   Map<String, dynamic> _stats = {};
   bool _isLoading = true;
 
+  final _fridgeService = FridgeService();
+  StreamSubscription<int?>? _fridgeSubscription;
+
   @override
   void initState() {
     super.initState();
+
+    _fridgeSubscription = _fridgeService.fridgeStream.listen((fridgeId) {
+      if (fridgeId != null && fridgeId != _selectedFridgeId) {
+        _selectedFridgeId = fridgeId;
+        _loadData();
+      }
+    });
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _fridgeSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -33,21 +52,9 @@ class _DashboardPageState extends State<DashboardPage> {
     try {
       final fridges = await _api.getFridges();
 
-      final prefs = await SharedPreferences.getInstance();
-      int? savedFridgeId = prefs.getInt('selected_fridge_id');
-
       setState(() {
         _fridges = fridges;
-        if (fridges.isNotEmpty) {
-          if (savedFridgeId != null &&
-              fridges.any((f) => f['id'] == savedFridgeId)) {
-            _selectedFridgeId = savedFridgeId;
-          } else {
-            _selectedFridgeId = fridges[0]['id'];
-            prefs.setInt('selected_fridge_id', _selectedFridgeId!);
-          }
-          _loadStats();
-        }
+        _loadStats();
         _isLoading = false;
       });
     } catch (e) {
@@ -82,10 +89,9 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  void _onFridgeChanged(int fridgeId) {
-    setState(() {
-      _selectedFridgeId = fridgeId;
-    });
+  void _onFridgeChanged(int fridgeId) async {
+    await _fridgeService.setSelectedFridge(fridgeId);
+    // Plus besoin de setState ici, le stream s'en charge
     _loadStats();
   }
 

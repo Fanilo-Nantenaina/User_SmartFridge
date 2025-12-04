@@ -11,6 +11,7 @@ import 'package:user_smartfridge/screens/profile.dart';
 import 'package:user_smartfridge/screens/recipes.dart';
 import 'package:user_smartfridge/screens/shopping_list.dart';
 import 'package:user_smartfridge/service/api.dart';
+import 'package:user_smartfridge/service/fridge.dart';
 import 'package:user_smartfridge/service/notification.dart';
 import 'package:user_smartfridge/service/theme.dart';
 
@@ -22,6 +23,7 @@ Future<void> main() async {
   await NotificationService().initialize();
 
   await ThemeSwitcher().init();
+  await FridgeService().initialize();
 
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   runApp(const SmartFridgeClientApp());

@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+// Import du nouveau service
+import 'package:user_smartfridge/service/fridge.dart';
 
 class FridgeSelector extends StatefulWidget {
   final List<dynamic> fridges;
   final int? selectedFridgeId;
-  final Function(int) onFridgeChanged;
+  final Function(int)? onFridgeChanged; // Optionnel maintenant
 
   const FridgeSelector({
     super.key,
     required this.fridges,
     required this.selectedFridgeId,
-    required this.onFridgeChanged,
+    this.onFridgeChanged,
   });
 
   @override
@@ -18,10 +19,14 @@ class FridgeSelector extends StatefulWidget {
 }
 
 class _FridgeSelectorState extends State<FridgeSelector> {
+  final _fridgeService = FridgeService(); // Instance du service
+
   Future<void> _selectFridge(int fridgeId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('selected_fridge_id', fridgeId);
-    widget.onFridgeChanged(fridgeId);
+    // Utiliser le service global qui notifiera automatiquement toutes les pages
+    await _fridgeService.setSelectedFridge(fridgeId);
+
+    // Callback optionnel pour compatibilité
+    widget.onFridgeChanged?.call(fridgeId);
   }
 
   void _showFridgePickerDialog() {
@@ -56,7 +61,10 @@ class _FridgeSelectorState extends State<FridgeSelector> {
               final isSelected = fridge['id'] == widget.selectedFridgeId;
 
               return ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
                 leading: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -75,23 +83,25 @@ class _FridgeSelectorState extends State<FridgeSelector> {
                 title: Text(
                   fridge['name'] ?? 'Mon Frigo',
                   style: TextStyle(
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     color: Theme.of(context).textTheme.bodyLarge?.color,
                   ),
                 ),
                 subtitle: fridge['location'] != null
                     ? Text(
-                  fridge['location'],
-                  style: TextStyle(
-                    color: Theme.of(context).textTheme.bodySmall?.color,
-                  ),
-                )
+                        fridge['location'],
+                        style: TextStyle(
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      )
                     : null,
                 trailing: isSelected
                     ? Icon(
-                  Icons.check_circle,
-                  color: Theme.of(context).colorScheme.primary,
-                )
+                        Icons.check_circle,
+                        color: Theme.of(context).colorScheme.primary,
+                      )
                     : null,
                 onTap: () {
                   Navigator.pop(context);
@@ -116,7 +126,7 @@ class _FridgeSelectorState extends State<FridgeSelector> {
     if (widget.fridges.isEmpty) return const SizedBox.shrink();
 
     final selectedFridge = widget.fridges.firstWhere(
-          (f) => f['id'] == widget.selectedFridgeId,
+      (f) => f['id'] == widget.selectedFridgeId,
       orElse: () => widget.fridges.first,
     );
 

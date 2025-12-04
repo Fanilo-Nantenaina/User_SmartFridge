@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/service/api.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:user_smartfridge/service/fridge.dart';
 
 class ShoppingListsPage extends StatefulWidget {
   const ShoppingListsPage({super.key});
@@ -16,6 +19,9 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     with SingleTickerProviderStateMixin {
   final ClientApiService _api = ClientApiService();
   late TabController _tabController;
+
+  final _fridgeService = FridgeService();
+  StreamSubscription<int?>? _fridgeSubscription;
 
   String _currentSort = 'date';
   String _sortOrder = 'desc';
@@ -50,27 +56,19 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     _initializeDateFormatting();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() => _filterLists());
+
+    _fridgeSubscription = _fridgeService.fridgeStream.listen((fridgeId) {
+      if (fridgeId != null && fridgeId != _selectedFridgeId) {
+        _selectedFridgeId = fridgeId;
+        _loadShoppingLists(); // Nom de ta méthode de chargement
+      }
+    });
+
     _loadShoppingLists();
   }
 
   Future<void> _initializeDateFormatting() async {
     await initializeDateFormatting('fr_FR', null);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _checkAndReloadIfNeeded();
-  }
-
-  Future<void> _checkAndReloadIfNeeded() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedFridgeId = prefs.getInt('selected_fridge_id');
-    if (savedFridgeId != null &&
-        savedFridgeId != _selectedFridgeId &&
-        !_isLoading) {
-      _loadShoppingLists();
-    }
   }
 
   void _showSortOptions() {
@@ -123,6 +121,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
   @override
   void dispose() {
     _tabController.dispose();
+    _fridgeSubscription?.cancel();
     super.dispose();
   }
 
@@ -137,17 +136,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
           _isLoading = false;
         });
         return;
-      }
-
-      final prefs = await SharedPreferences.getInstance();
-      int? savedFridgeId = prefs.getInt('selected_fridge_id');
-
-      if (savedFridgeId != null &&
-          fridges.any((f) => f['id'] == savedFridgeId)) {
-        _selectedFridgeId = savedFridgeId;
-      } else {
-        _selectedFridgeId = fridges[0]['id'];
-        await prefs.setInt('selected_fridge_id', _selectedFridgeId!);
       }
 
       final lists = await _api.getShoppingLists(
@@ -431,7 +419,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     final generatedBy = list['generated_by'] ?? 'manual';
     final isEditable = _isListEditable(list);
     final listName = list['name'] ?? 'Liste du ${_formatDate(createdAt)}';
-
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1522,7 +1509,8 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     final isEditable = _isListEditable(list);
     final generatedBy = list['generated_by'] ?? 'manual';
 
-    final listName = list['name'] ??
+    final listName =
+        list['name'] ??
         'Liste du ${_formatDate(DateTime.parse(list['created_at']))}';
 
     showModalBottomSheet(
