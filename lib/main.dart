@@ -81,9 +81,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return _isAuthenticated ? const HomePage() : const LoginPage();
   }
@@ -92,7 +90,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
 class HomePage extends StatefulWidget {
   final int initialIndex;
 
-  const HomePage({super.key, this.initialIndex=0});
+  const HomePage({super.key, this.initialIndex = 0});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -101,20 +99,80 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late int _currentIndex;
   int _pendingShoppingListsCount = 0;
+  int _pendingAlertsCount = 0; // ✅ NOUVEAU
+  int _expiringItemsCount = 0; // ✅ NOUVEAU
+  int? _selectedFridgeId; // ✅ NOUVEAU
+
+  final List<Widget> _pages = const [
+    DashboardPage(),
+    InventoryPage(),
+    RecipesPage(),
+    ShoppingListsPage(),
+    AlertsPage(),
+    ProfilePage(),
+  ];
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
-    _loadPendingShoppingListsCount();
+    _initializeFridgeAndBadges(); // ✅ NOUVEAU
+    _listenToFridgeChanges(); // ✅ NOUVEAU
+  }
+
+  // ✅ NOUVEAU : Initialiser le frigo au démarrage
+  Future<void> _initializeFridgeAndBadges() async {
+    try {
+      final api = ClientApiService();
+      final fridges = await api.getFridges();
+
+      if (fridges.isEmpty) return;
+
+      // Récupérer le frigo sauvegardé ou prendre le premier
+      final fridgeService = FridgeService();
+      int? savedFridgeId = await fridgeService.getSelectedFridge();
+
+      if (savedFridgeId != null &&
+          fridges.any((f) => f['id'] == savedFridgeId)) {
+        _selectedFridgeId = savedFridgeId;
+      } else {
+        _selectedFridgeId = fridges[0]['id'];
+        await fridgeService.setSelectedFridge(_selectedFridgeId!);
+      }
+
+      // Charger tous les badges
+      await _loadAllBadges();
+    } catch (e) {
+      print('❌ Erreur initialisation: $e');
+    }
+  }
+
+  // ✅ NOUVEAU : Écouter les changements de frigo
+  void _listenToFridgeChanges() {
+    FridgeService().fridgeStream.listen((fridgeId) {
+      if (fridgeId != null && fridgeId != _selectedFridgeId) {
+        _selectedFridgeId = fridgeId;
+        _loadAllBadges(); // Recharger tous les badges
+      }
+    });
+  }
+
+  // ✅ NOUVEAU : Charger tous les badges
+  Future<void> _loadAllBadges() async {
+    await Future.wait([
+      _loadPendingShoppingListsCount(),
+      _loadPendingAlertsCount(),
+      _loadExpiringItemsCount(),
+    ]);
   }
 
   Future<void> _loadPendingShoppingListsCount() async {
+    if (_selectedFridgeId == null) return;
+
     try {
       final api = ClientApiService();
-      final lists = await api.getShoppingLists();
+      final lists = await api.getShoppingLists(fridgeId: _selectedFridgeId);
 
-      // Compter les listes avec des items pending
       int count = 0;
       for (var list in lists) {
         final items = list['items'] as List? ?? [];
@@ -124,39 +182,63 @@ class _HomePageState extends State<HomePage> {
       }
 
       if (mounted) {
-        setState(() {
-          _pendingShoppingListsCount = count;
-        });
+        setState(() => _pendingShoppingListsCount = count);
       }
     } catch (e) {
-      // Ignorer les erreurs silencieusement
+      print('❌ Erreur chargement shopping lists: $e');
     }
   }
 
-  final List<Widget> _pages = [
-    const DashboardPage(),
-    const InventoryPage(),
-    const RecipesPage(),
-    const ShoppingListsPage(),
-    const AlertsPage(),
-    const ProfilePage(),
-  ];
+  // ✅ NOUVEAU : Charger les alertes en attente
+  Future<void> _loadPendingAlertsCount() async {
+    if (_selectedFridgeId == null) return;
 
-  @override
+    try {
+      final api = ClientApiService();
+      final alerts = await api.getAlerts(_selectedFridgeId!, status: 'pending');
+
+      if (mounted) {
+        setState(() => _pendingAlertsCount = alerts.length);
+      }
+    } catch (e) {
+      print('❌ Erreur chargement alertes: $e');
+    }
+  }
+
+  // ✅ NOUVEAU : Charger les items expirant bientôt
+  Future<void> _loadExpiringItemsCount() async {
+    if (_selectedFridgeId == null) return;
+
+    try {
+      final api = ClientApiService();
+      final inventory = await api.getInventory(_selectedFridgeId!);
+
+      final expiringCount = inventory.where((item) {
+        final status = item['freshness_status'];
+        return status == 'expiring_soon' || status == 'expires_today';
+      }).length;
+
+      if (mounted) {
+        setState(() => _expiringItemsCount = expiringCount);
+      }
+    } catch (e) {
+      print('❌ Erreur chargement inventaire: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
-      ),
+      body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
           setState(() => _currentIndex = index);
-          if (index == 3) {
-            _loadPendingShoppingListsCount();
-          }
+
+          // Recharger les badges quand on change d'onglet
+          if (index == 1) _loadExpiringItemsCount(); // Inventaire
+          if (index == 3) _loadPendingShoppingListsCount(); // Courses
+          if (index == 4) _loadPendingAlertsCount(); // Alertes
         },
         destinations: [
           const NavigationDestination(
@@ -164,9 +246,18 @@ class _HomePageState extends State<HomePage> {
             selectedIcon: Icon(Icons.dashboard),
             label: 'Accueil',
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            selectedIcon: Icon(Icons.inventory_2),
+          // ✅ Badge pour inventaire
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: _expiringItemsCount > 0,
+              label: Text('$_expiringItemsCount'),
+              child: const Icon(Icons.inventory_2_outlined),
+            ),
+            selectedIcon: Badge(
+              isLabelVisible: _expiringItemsCount > 0,
+              label: Text('$_expiringItemsCount'),
+              child: const Icon(Icons.inventory_2),
+            ),
             label: 'Inventaire',
           ),
           const NavigationDestination(
@@ -174,6 +265,7 @@ class _HomePageState extends State<HomePage> {
             selectedIcon: Icon(Icons.restaurant_menu),
             label: 'Recettes',
           ),
+          // ✅ Badge pour courses
           NavigationDestination(
             icon: Badge(
               isLabelVisible: _pendingShoppingListsCount > 0,
@@ -187,9 +279,18 @@ class _HomePageState extends State<HomePage> {
             ),
             label: 'Courses',
           ),
-          const NavigationDestination(
-            icon: Icon(Icons.notifications_outlined),
-            selectedIcon: Icon(Icons.notifications),
+          // ✅ Badge pour alertes
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: _pendingAlertsCount > 0,
+              label: Text('$_pendingAlertsCount'),
+              child: const Icon(Icons.notifications_outlined),
+            ),
+            selectedIcon: Badge(
+              isLabelVisible: _pendingAlertsCount > 0,
+              label: Text('$_pendingAlertsCount'),
+              child: const Icon(Icons.notifications),
+            ),
             label: 'Alertes',
           ),
           const NavigationDestination(

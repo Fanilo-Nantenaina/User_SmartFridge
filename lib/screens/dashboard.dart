@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/screens/search_inventory.dart';
 import 'package:user_smartfridge/screens/shopping_list.dart';
@@ -114,16 +113,6 @@ class _DashboardPageState extends State<DashboardPage> {
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
       ),
     );

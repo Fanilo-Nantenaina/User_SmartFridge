@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/screens/shopping_list.dart';
 import 'package:user_smartfridge/service/api.dart';
@@ -124,7 +123,6 @@ class _InventoryPageState extends State<InventoryPage>
   }
 
   void _filterInventory() {
-    final now = DateTime.now();
     setState(() {
       List<dynamic> filtered = _inventory;
 
@@ -373,6 +371,17 @@ class _InventoryPageState extends State<InventoryPage>
   }
 
   Widget _buildTabBar() {
+    // Compter les items à consommer
+    final expiringCount = _inventory.where((item) {
+      final status = item['freshness_status'];
+      return status == 'expiring_soon' || status == 'expires_today';
+    }).length;
+
+    // Compter les items expirés
+    final expiredCount = _inventory.where((item) {
+      return item['freshness_status'] == 'expired';
+    }).length;
+
     return Container(
       color: Theme.of(context).cardColor,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -383,10 +392,66 @@ class _InventoryPageState extends State<InventoryPage>
         indicatorColor: Theme.of(context).colorScheme.primary,
         indicatorWeight: 3,
         labelStyle: const TextStyle(fontWeight: FontWeight.w600),
-        tabs: const [
-          Tab(text: 'Tous'),
-          Tab(text: 'À consommer'),
-          Tab(text: 'Expirés'),
+        tabs: [
+          const Tab(text: 'Tous'),
+          Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('À consommer'),
+                if (expiringCount > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '$expiringCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Expirés'),
+                if (expiredCount > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '$expiredCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );

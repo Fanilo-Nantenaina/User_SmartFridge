@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/service/api.dart';
 import 'package:user_smartfridge/service/fridge.dart';
@@ -223,13 +222,24 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Widget _buildFilterChips() {
+    // Compter les alertes par statut
+    final pendingCount = _alerts.where((a) => a['status'] == 'pending').length;
+    final resolvedCount = _alerts
+        .where((a) => a['status'] == 'resolved')
+        .length;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            _buildFilterChip('En attente', 'pending', Icons.pending_outlined),
+            _buildFilterChip(
+              'En attente',
+              'pending',
+              Icons.pending_outlined,
+              count: pendingCount,
+            ),
             const SizedBox(width: 8),
             _buildFilterChip('Toutes', 'all', Icons.list_alt),
             const SizedBox(width: 8),
@@ -237,6 +247,7 @@ class _AlertsPageState extends State<AlertsPage> {
               'Résolues',
               'resolved',
               Icons.check_circle_outline,
+              count: resolvedCount,
             ),
           ],
         ),
@@ -244,7 +255,12 @@ class _AlertsPageState extends State<AlertsPage> {
     );
   }
 
-  Widget _buildFilterChip(String label, String value, IconData icon) {
+  Widget _buildFilterChip(
+    String label,
+    String value,
+    IconData icon, {
+    int? count,
+  }) {
     final isSelected = _filter == value;
 
     return InkWell(
@@ -287,6 +303,27 @@ class _AlertsPageState extends State<AlertsPage> {
                 fontSize: 14,
               ),
             ),
+            // ✅ Badge sur le chip
+            if (count != null && count > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.white.withOpacity(0.3)
+                      : const Color(0xFFF59E0B),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

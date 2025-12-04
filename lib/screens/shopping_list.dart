@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/service/api.dart';
 import 'package:intl/intl.dart';
@@ -351,8 +350,64 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
         indicatorWeight: 3,
         labelStyle: const TextStyle(fontWeight: FontWeight.w600),
         tabs: [
-          Tab(text: 'En cours (${_activeLists.length})'),
-          Tab(text: 'Terminées (${_completedLists.length})'),
+          Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('En cours'),
+                if (_activeLists.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${_activeLists.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Terminées'),
+                if (_completedLists.isNotEmpty) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${_completedLists.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -417,7 +472,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     final totalCount = items.length;
     final createdAt = DateTime.parse(list['created_at']);
     final generatedBy = list['generated_by'] ?? 'manual';
-    final isEditable = _isListEditable(list);
     final listName = list['name'] ?? 'Liste du ${_formatDate(createdAt)}';
 
     return Container(
