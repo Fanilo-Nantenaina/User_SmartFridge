@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:user_smartfridge/service/api.dart';
+import 'package:user_smartfridge/service/fridge.dart';
 import 'package:intl/intl.dart';
 
 class SearchInventoryPage extends StatefulWidget {
@@ -15,28 +16,33 @@ class SearchInventoryPage extends StatefulWidget {
 class _SearchInventoryPageState extends State<SearchInventoryPage>
     with SingleTickerProviderStateMixin {
   final ClientApiService _api = ClientApiService();
+  final FridgeService _fridgeService = FridgeService();
   final TextEditingController _searchController = TextEditingController();
 
   late stt.SpeechToText _speech;
   late FlutterTts _tts;
   bool _isListening = false;
+  bool _isSearching = false;
 
-  List<dynamic> _allInventory = [];
-  List<dynamic> _allProducts = [];
-  List<dynamic> _filteredResults = [];
-  bool _isLoading = false;
-  bool _hasSearched = false;
+  // Historique des recherches
+  List<dynamic> _searchHistory = [];
+  bool _isLoadingHistory = false;
+
+  // Résultat actuel
+  Map<String, dynamic>? _currentResult;
 
   late AnimationController _animationController;
   late Animation<double> _pulseAnimation;
+
+  int? _selectedFridgeId;
 
   @override
   void initState() {
     super.initState();
     _speech = stt.SpeechToText();
     _tts = FlutterTts();
-    _loadInventory();
     _configureTts();
+    _initializeFridge();
 
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 1500),
@@ -56,6 +62,13 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
     super.dispose();
   }
 
+  Future<void> _initializeFridge() async {
+    _selectedFridgeId = await _fridgeService.getSelectedFridge();
+    if (_selectedFridgeId != null) {
+      await _loadSearchHistory();
+    }
+  }
+
   Future<void> _configureTts() async {
     await _tts.setLanguage('fr-FR');
     await _tts.setSpeechRate(0.5);
@@ -63,189 +76,118 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
     await _tts.setPitch(1.0);
   }
 
-  Future<void> _loadInventory() async {
-    setState(() => _isLoading = true);
+  // ✅ NOUVEAU : Charger l'historique depuis le backend
+  Future<void> _loadSearchHistory() async {
+    if (_selectedFridgeId == null) return;
+
+    setState(() => _isLoadingHistory = true);
 
     try {
-      final fridges = await _api.getFridges();
-      if (fridges.isEmpty) {
-        setState(() => _isLoading = false);
-        _showError('Aucun frigo connecté');
-        return;
-      }
-
-      // Charger l'inventaire ET les produits
-      final inventory = await _api.getInventory(fridges[0]['id']);
-      final products = await _api.getProducts();
-
-      if (kDebugMode) {
-        print('Inventory loaded: ${inventory.length} items');
-        print('Products loaded: ${products.length} items');
-      }
-
-      setState(() {
-        _allInventory = inventory;
-        _allProducts = products;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      _showError('Erreur de chargement: $e');
-    }
-  }
-
-  String _getProductName(int? productId) {
-    if (productId == null) return 'Produit inconnu';
-
-    try {
-      final product = _allProducts.firstWhere(
-        (p) => p['id'] == productId,
-        orElse: () => null,
+      final history = await _api.getSearchHistory(
+        fridgeId: _selectedFridgeId!,
+        limit: 50,
       );
-      return product?['name'] ?? 'Produit #$productId';
+
+      if (mounted) {
+        setState(() {
+          _searchHistory = history;
+          _isLoadingHistory = false;
+        });
+      }
     } catch (e) {
-      return 'Produit #$productId';
+      setState(() => _isLoadingHistory = false);
+      if (kDebugMode) print('❌ Erreur chargement historique: $e');
     }
   }
 
-  void _performSearch(String query) {
-    if (query.isEmpty) {
-      setState(() {
-        _filteredResults = [];
-        _hasSearched = false;
-      });
+  // ✅ NOUVEAU : Recherche avec API backend
+  Future<void> _performAISearch(String query) async {
+    if (query.trim().isEmpty) return;
+    if (_selectedFridgeId == null) {
+      _showError('Aucun frigo sélectionné');
       return;
     }
 
-    setState(() => _hasSearched = true);
-
-    final normalizedQuery = _normalizeQuery(query.toLowerCase());
-
-    if (kDebugMode) {
-      print('Searching for: "$normalizedQuery"');
-    }
-
-    final results = _allInventory.where((item) {
-      final productId = item['product_id'];
-      final productName = _getProductName(productId).toLowerCase();
-
-      // Récupérer la catégorie depuis les produits
-      String category = '';
-      try {
-        final product = _allProducts.firstWhere(
-          (p) => p['id'] == productId,
-          orElse: () => null,
-        );
-        category = (product?['category'] ?? '').toLowerCase();
-      } catch (e) {
-        // Ignore
-      }
-
-      final matches =
-          productName.contains(normalizedQuery) ||
-          category.contains(normalizedQuery) ||
-          _fuzzyMatch(productName, normalizedQuery);
-
-      if (kDebugMode && matches) {
-        print(
-          'Match found: $productName (${item['quantity']} ${item['unit']})',
-        );
-      }
-
-      return matches;
-    }).toList();
-
-    // Trier les résultats
-    results.sort((a, b) {
-      final nameA = _getProductName(a['product_id']).toLowerCase();
-      final nameB = _getProductName(b['product_id']).toLowerCase();
-
-      if (nameA.startsWith(normalizedQuery)) return -1;
-      if (nameB.startsWith(normalizedQuery)) return 1;
-
-      if (nameA.contains(normalizedQuery) && !nameB.contains(normalizedQuery))
-        return -1;
-      if (!nameA.contains(normalizedQuery) && nameB.contains(normalizedQuery))
-        return 1;
-
-      return 0;
+    setState(() {
+      _isSearching = true;
+      _currentResult = null;
     });
 
-    setState(() => _filteredResults = results);
+    try {
+      final result = await _api.searchInventoryWithAI(
+        fridgeId: _selectedFridgeId!,
+        query: query.trim(),
+      );
 
-    if (results.length == 1) {
-      _announceResult(results[0]);
-    } else if (results.isEmpty) {
-      _speak('Aucun produit trouvé pour $query');
-    } else {
-      _speak('J\'ai trouvé ${results.length} produits');
+      if (mounted) {
+        setState(() {
+          _currentResult = result;
+          _isSearching = false;
+        });
+
+        // Lire la réponse à voix haute
+        final response = result['response'] ?? '';
+        if (response.isNotEmpty) {
+          await _speak(response);
+        }
+
+        // Recharger l'historique (la recherche a été sauvegardée côté backend)
+        await _loadSearchHistory();
+      }
+    } catch (e) {
+      setState(() => _isSearching = false);
+      _showError(
+        'Erreur de recherche: ${e.toString().replaceAll('Exception: ', '')}',
+      );
     }
   }
 
-  String _normalizeQuery(String query) {
-    final stopWords = [
-      'combien',
-      'reste',
-      'il',
-      'de',
-      'me',
-      'ai',
-      'je',
-      'dans',
-      'mon',
-      'le',
-      'la',
-      'les',
-      'un',
-      'une',
-      'des',
-      'frigo',
-      'réfrigérateur',
-      'congélateur',
-      'y',
-      'a',
-      't',
-      'il',
-      'est',
-      'ce',
-      'que',
-    ];
+  // ✅ NOUVEAU : Supprimer l'historique
+  Future<void> _clearSearchHistory() async {
+    if (_selectedFridgeId == null) return;
 
-    var normalized = query;
-    for (var word in stopWords) {
-      normalized = normalized.replaceAll(RegExp('\\b$word\\b'), '');
-    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer l\'historique ?'),
+        content: const Text(
+          'Cette action est irréversible. Tous vos anciens résultats de recherche seront supprimés.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
 
-    return normalized.trim();
-  }
-
-  bool _fuzzyMatch(String text, String query) {
-    if (text.length < query.length) return false;
-
-    var queryIndex = 0;
-    for (var i = 0; i < text.length && queryIndex < query.length; i++) {
-      if (text[i] == query[queryIndex]) {
-        queryIndex++;
+    if (confirmed == true) {
+      try {
+        await _api.clearSearchHistory(fridgeId: _selectedFridgeId!);
+        setState(() => _searchHistory = []);
+        _showSuccess('Historique supprimé');
+      } catch (e) {
+        _showError('Erreur de suppression');
       }
     }
-
-    return queryIndex == query.length;
   }
 
   Future<void> _startListening() async {
     bool available = await _speech.initialize(
       onStatus: (status) {
-        if (kDebugMode) {
-          print('Speech status: $status');
-        }
+        if (kDebugMode) print('Speech status: $status');
         if (status == 'done' || status == 'notListening') {
           setState(() => _isListening = false);
         }
       },
       onError: (error) {
-        if (kDebugMode) {
-          print('Speech error: $error');
-        }
+        if (kDebugMode) print('Speech error: $error');
         setState(() => _isListening = false);
         _showError('Erreur de reconnaissance vocale');
       },
@@ -264,7 +206,7 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
           });
 
           if (result.finalResult) {
-            _performSearch(result.recognizedWords);
+            _performAISearch(result.recognizedWords);
             _stopListening();
           }
         },
@@ -286,17 +228,6 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
 
   Future<void> _speak(String text) async {
     await _tts.speak(text);
-  }
-
-  void _announceResult(Map<String, dynamic> item) {
-    final quantity = item['quantity'];
-    final unit = item['unit'];
-    final productName = _getProductName(item['product_id']);
-
-    final message = 'Il vous reste $quantity $unit de $productName';
-    _speak(message);
-
-    _showSuccess(message);
   }
 
   void _showError(String message) {
@@ -322,14 +253,16 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
           _buildSearchHeader(),
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _buildResultsList(),
+            child: _isSearching
+                ? _buildLoadingState()
+                : _currentResult != null
+                ? _buildResultView()
+                : _buildHistoryView(),
           ),
         ],
       ),
@@ -359,18 +292,23 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
                   ),
                 ),
               ),
+              if (_searchHistory.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: _clearSearchHistory,
+                  tooltip: 'Supprimer l\'historique',
+                ),
             ],
           ),
           const SizedBox(height: 16),
-
           Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _searchController,
-                  onChanged: _performSearch,
+                  onSubmitted: _performAISearch,
                   decoration: InputDecoration(
-                    hintText: 'Ex: Combien d\'œufs ?',
+                    hintText: 'Ex: Combien d\'œufs il me reste ?',
                     prefixIcon: Icon(
                       Icons.search,
                       color: Theme.of(context).iconTheme.color,
@@ -383,39 +321,21 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
                             ),
                             onPressed: () {
                               _searchController.clear();
-                              _performSearch('');
+                              setState(() => _currentResult = null);
                             },
                           )
                         : null,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: Theme.of(context).colorScheme.outline,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: Theme.of(context).colorScheme.primary,
-                        width: 2,
-                      ),
                     ),
                     filled: true,
                     fillColor: Theme.of(
                       context,
                     ).colorScheme.surfaceContainerHighest,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
-
               ScaleTransition(
                 scale: _isListening
                     ? _pulseAnimation
@@ -456,8 +376,7 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
               ),
             ],
           ),
-
-          if (!_hasSearched) ...[
+          if (_currentResult == null) ...[
             const SizedBox(height: 16),
             Text(
               'Essayez par exemple:',
@@ -474,12 +393,11 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
               children: [
                 _buildSuggestionChip('Combien d\'œufs ?'),
                 _buildSuggestionChip('Reste-t-il du lait ?'),
-                _buildSuggestionChip('Tomates'),
-                _buildSuggestionChip('Produits laitiers'),
+                _buildSuggestionChip('Qu\'est-ce qui expire bientôt ?'),
+                _buildSuggestionChip('Que puis-je cuisiner ?'),
               ],
             ),
           ],
-
           if (_isListening) ...[
             const SizedBox(height: 16),
             Container(
@@ -526,83 +444,207 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
       label: Text(text),
       onPressed: () {
         _searchController.text = text;
-        _performSearch(text);
+        _performAISearch(text);
       },
       backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
       labelStyle: TextStyle(
         color: Theme.of(context).colorScheme.primary,
         fontWeight: FontWeight.w500,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-        ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 16),
+          Text(
+            'Recherche en cours...',
+            style: TextStyle(
+              color: Theme.of(context).textTheme.bodyMedium?.color,
+              fontSize: 16,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildResultCard(Map<String, dynamic> item) {
-    final quantity = item['quantity'];
-    final unit = item['unit'] ?? '';
-    final productName = _getProductName(item['product_id']);
+  Widget _buildResultView() {
+    if (_currentResult == null) return const SizedBox.shrink();
 
-    String category = '';
-    try {
-      final product = _allProducts.firstWhere(
-        (p) => p['id'] == item['product_id'],
-        orElse: () => null,
-      );
-      category = product?['category'] ?? '';
-    } catch (e) {
-      // Ignore
+    final query = _currentResult!['query'] ?? '';
+    final response = _currentResult!['response'] ?? '';
+    final timestamp = _currentResult!['timestamp'] ?? '';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Question posée
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.question_answer,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Votre question',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        query,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Réponse de l'IA
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.smart_toy, color: Colors.green),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Réponse de l\'assistant',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.volume_up),
+                      onPressed: () => _speak(response),
+                      tooltip: 'Lire à voix haute',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  response,
+                  style: const TextStyle(fontSize: 16, height: 1.5),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _formatTimestamp(timestamp),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).textTheme.bodyMedium?.color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Bouton nouvelle recherche
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                _searchController.clear();
+                setState(() => _currentResult = null);
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Nouvelle recherche'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryView() {
+    if (_isLoadingHistory) {
+      return const Center(child: CircularProgressIndicator());
     }
 
-    final expiryDate = item['expiry_date'] != null
-        ? DateTime.parse(item['expiry_date'])
-        : null;
-
-    Color statusColor = const Color(0xFF10B981);
-    String statusText = 'Disponible';
-    IconData statusIcon = Icons.check_circle_outline;
-
-    if (expiryDate != null) {
-      final daysUntilExpiry = expiryDate.difference(DateTime.now()).inDays;
-      if (daysUntilExpiry < 0) {
-        statusColor = const Color(0xFFEF4444);
-        statusText = 'Expiré';
-        statusIcon = Icons.dangerous_outlined;
-      } else if (daysUntilExpiry == 0) {
-        statusColor = const Color(0xFFEF4444);
-        statusText = 'Expire aujourd\'hui';
-        statusIcon = Icons.warning_outlined;
-      } else if (daysUntilExpiry <= 3) {
-        statusColor = const Color(0xFFF59E0B);
-        statusText = 'Expire bientôt';
-        statusIcon = Icons.schedule_outlined;
-      }
+    if (_searchHistory.isEmpty) {
+      return _buildEmptyState();
     }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _searchHistory.length,
+      itemBuilder: (context, index) {
+        final item = _searchHistory[index];
+        return _buildHistoryCard(item);
+      },
+    );
+  }
+
+  Widget _buildHistoryCard(Map<String, dynamic> item) {
+    final query = item['query'] ?? '';
+    final response = item['response'] ?? '';
+    final timestamp = item['timestamp'] ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outline),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+        ),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => _announceResult(item),
+          onTap: () {
+            _searchController.text = query;
+            setState(() => _currentResult = item);
+          },
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -610,157 +652,54 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Theme.of(context).colorScheme.primary,
-                            Theme.of(
-                              context,
-                            ).colorScheme.primary.withOpacity(0.8),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.shopping_basket,
-                        color: Colors.white,
-                        size: 24,
-                      ),
+                    Icon(
+                      Icons.history,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 8),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            productName,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(
-                                context,
-                              ).textTheme.bodyLarge?.color,
-                            ),
-                          ),
-                          if (category.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              category,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Theme.of(
-                                  context,
-                                ).textTheme.bodyMedium?.color,
-                              ),
-                            ),
-                          ],
-                        ],
+                      child: Text(
+                        query,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(
-                      icon: Icon(
-                        Icons.volume_up,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      onPressed: () => _announceResult(item),
-                      tooltip: 'Lire à voix haute',
+                      icon: const Icon(Icons.volume_up, size: 20),
+                      onPressed: () => _speak(response),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 8),
+                Text(
+                  response,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).textTheme.bodyMedium?.color,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.inventory_2,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Il vous reste',
-                        style: TextStyle(
-                          color: Theme.of(context).textTheme.bodyMedium?.color,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '$quantity $unit',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _formatTimestamp(timestamp),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).textTheme.bodySmall?.color,
                   ),
                 ),
-                if (expiryDate != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(statusIcon, size: 16, color: statusColor),
-                        const SizedBox(width: 8),
-                        Text(
-                          statusText,
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '• ${_formatDate(expiryDate)}',
-                          style: TextStyle(color: statusColor, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildResultsList() {
-    if (!_hasSearched) {
-      return _buildEmptyState();
-    }
-
-    if (_filteredResults.isEmpty) {
-      return _buildNoResultsState();
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _filteredResults.length,
-      itemBuilder: (context, index) =>
-          _buildResultCard(_filteredResults[index]),
     );
   }
 
@@ -774,10 +713,14 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.search, size: 64, color: Colors.grey.shade400),
+              child: Icon(
+                Icons.search,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 24),
             Text(
@@ -785,14 +728,17 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
+                color: Theme.of(context).textTheme.titleLarge?.color,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Tapez ou parlez pour rechercher un produit',
+              'Posez une question en utilisant\nle micro ou le clavier',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade500, height: 1.5),
+              style: TextStyle(
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+                height: 1.5,
+              ),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -800,16 +746,10 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
               icon: const Icon(Icons.mic),
               label: const Text('Commencer'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF3B82F6),
-                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 32,
                   vertical: 16,
                 ),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
               ),
             ),
           ],
@@ -818,55 +758,28 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
     );
   }
 
-  Widget _buildNoResultsState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off, size: 100, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
-            Text(
-              'Aucun résultat',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Essayez avec un autre terme',
-              style: TextStyle(color: Colors.grey.shade500),
-            ),
-            const SizedBox(height: 24),
-            OutlinedButton.icon(
-              onPressed: () {
-                _searchController.clear();
-                _performSearch('');
-              },
-              icon: const Icon(Icons.refresh),
-              label: const Text('Nouvelle recherche'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF3B82F6),
-                side: const BorderSide(color: Color(0xFF3B82F6)),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  String _formatTimestamp(String timestamp) {
+    try {
+      final date = DateTime.parse(timestamp);
+      final now = DateTime.now();
+      final diff = now.difference(date);
 
-  String _formatDate(DateTime date) {
-    return DateFormat('d MMM yyyy', 'fr_FR').format(date);
+      if (diff.inDays == 0) {
+        if (diff.inHours == 0) {
+          if (diff.inMinutes == 0) {
+            return 'À l\'instant';
+          }
+          return 'Il y a ${diff.inMinutes} min';
+        }
+        return 'Il y a ${diff.inHours}h';
+      } else if (diff.inDays == 1) {
+        return 'Hier à ${DateFormat.Hm('fr_FR').format(date)}';
+      } else if (diff.inDays < 7) {
+        return 'Il y a ${diff.inDays} jours';
+      }
+      return DateFormat('d MMM yyyy', 'fr_FR').format(date);
+    } catch (e) {
+      return timestamp;
+    }
   }
 }

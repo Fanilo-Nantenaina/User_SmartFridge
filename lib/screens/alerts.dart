@@ -19,6 +19,7 @@ class _AlertsPageState extends State<AlertsPage> {
   bool _isLoading = true;
   String _filter = 'pending';
   int? _selectedFridgeId;
+  String _sortOrder = 'desc';
 
   final _fridgeService = FridgeService();
   StreamSubscription<int?>? _fridgeSubscription;
@@ -76,6 +77,18 @@ class _AlertsPageState extends State<AlertsPage> {
         status: _filter == 'all' ? null : _filter,
       );
 
+      final sortedAlerts = List<dynamic>.from(alerts);
+      sortedAlerts.sort((a, b) {
+        final dateA =
+            DateTime.tryParse(a['created_at'] ?? '') ?? DateTime.now();
+        final dateB =
+            DateTime.tryParse(b['created_at'] ?? '') ?? DateTime.now();
+
+        return _sortOrder == 'desc'
+            ? dateB.compareTo(dateA) // Plus récent d'abord
+            : dateA.compareTo(dateB); // Plus ancien d'abord
+      });
+
       setState(() {
         _alerts = alerts;
         _isLoading = false;
@@ -96,6 +109,63 @@ class _AlertsPageState extends State<AlertsPage> {
         _showError('Erreur: $e');
       }
     }
+  }
+
+  void _showSortOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.sort, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 12),
+                const Text(
+                  'Trier par date',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Option : Plus récent d'abord
+            ListTile(
+              leading: const Icon(Icons.arrow_downward),
+              title: const Text('Plus récent d\'abord'),
+              subtitle: const Text('Alertes récentes en premier'),
+              trailing: _sortOrder == 'desc' ? const Icon(Icons.check) : null,
+              onTap: () {
+                setState(() => _sortOrder = 'desc');
+                Navigator.pop(context);
+                _loadAlerts();
+              },
+            ),
+
+            const Divider(),
+
+            // Option : Plus ancien d'abord
+            ListTile(
+              leading: const Icon(Icons.arrow_upward),
+              title: const Text('Plus ancien d\'abord'),
+              subtitle: const Text('Alertes anciennes en premier'),
+              trailing: _sortOrder == 'asc' ? const Icon(Icons.check) : null,
+              onTap: () {
+                setState(() => _sortOrder = 'asc');
+                Navigator.pop(context);
+                _loadAlerts();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showError(String message) {
@@ -211,6 +281,14 @@ class _AlertsPageState extends State<AlertsPage> {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            icon: Icon(
+              _sortOrder == 'desc' ? Icons.arrow_downward : Icons.arrow_upward,
+              color: Theme.of(context).iconTheme.color,
+            ),
+            onPressed: _showSortOptions,
+            tooltip: 'Trier',
           ),
           IconButton(
             icon: Icon(Icons.refresh, color: Theme.of(context).iconTheme.color),
@@ -332,9 +410,9 @@ class _AlertsPageState extends State<AlertsPage> {
 
   Widget _buildAlertCard(Map<String, dynamic> alert) {
     final type = alert['type'] ?? '';
-    final color = _getAlertColor(type);
-    final icon = _getAlertIcon(type);
-    final title = _getAlertTitle(type);
+    final color = _getAlertColor(type, alert);
+    final icon = _getAlertIcon(type, alert);
+    final title = _getAlertTitle(type, alert);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -469,12 +547,12 @@ class _AlertsPageState extends State<AlertsPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _getAlertColor(alert['type']).withOpacity(0.1),
+                    color: _getAlertColor(alert['type'], alert).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
-                    _getAlertIcon(alert['type']),
-                    color: _getAlertColor(alert['type']),
+                    _getAlertIcon(alert['type'], alert),
+                    color: _getAlertColor(alert['type'], alert),
                     size: 28,
                   ),
                 ),
@@ -484,11 +562,11 @@ class _AlertsPageState extends State<AlertsPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _getAlertTitle(alert['type']),
+                        _getAlertTitle(alert['type'], alert),
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: _getAlertColor(alert['type']),
+                          color: _getAlertColor(alert['type'], alert),
                         ),
                       ),
                       if (alert['created_at'] != null)
@@ -714,12 +792,30 @@ class _AlertsPageState extends State<AlertsPage> {
     );
   }
 
-  Color _getAlertColor(String type) {
+  Color _getAlertColor(String type, Map<String, dynamic> alert) {
+    // ✅ NOUVEAU : Vérifier dynamiquement l'état réel
+    if (type == 'EXPIRY_SOON' || type == 'EXPIRED') {
+      final message = alert['message'] ?? '';
+
+      // Si réellement expiré → ROUGE
+      if (message.contains('a expiré') ||
+          message.contains('expirés') ||
+          message.contains('expiré il y a')) {
+        return const Color(0xFFEF4444); // Rouge
+      }
+
+      // Si expire aujourd'hui → ORANGE/ROUGE
+      if (message.contains('expire AUJOURD\'HUI') ||
+          message.contains('expire aujourd\'hui')) {
+        return const Color(0xFFEF4444); // Rouge aussi
+      }
+
+      // Sinon bientôt → ORANGE
+      return const Color(0xFFF59E0B); // Orange
+    }
+
+    // Autres types
     switch (type) {
-      case 'EXPIRED':
-        return const Color(0xFFEF4444);
-      case 'EXPIRY_SOON':
-        return const Color(0xFFF59E0B);
       case 'LOST_ITEM':
         return const Color(0xFFF59E0B);
       case 'LOW_STOCK':
@@ -729,12 +825,23 @@ class _AlertsPageState extends State<AlertsPage> {
     }
   }
 
-  IconData _getAlertIcon(String type) {
+  IconData _getAlertIcon(String type, Map<String, dynamic> alert) {
+    // ✅ NOUVEAU : Icône dynamique selon l'état réel
+    if (type == 'EXPIRY_SOON' || type == 'EXPIRED') {
+      final message = alert['message'] ?? '';
+
+      if (message.contains('a expiré') || message.contains('expirés')) {
+        return Icons.dangerous_outlined; // Icône danger pour expiré
+      }
+
+      if (message.contains('expire AUJOURD\'HUI')) {
+        return Icons.warning_outlined; // Avertissement urgent
+      }
+
+      return Icons.schedule_outlined; // Horloge pour bientôt
+    }
+
     switch (type) {
-      case 'EXPIRED':
-        return Icons.dangerous_outlined;
-      case 'EXPIRY_SOON':
-        return Icons.schedule_outlined;
       case 'LOST_ITEM':
         return Icons.search_off_outlined;
       case 'LOW_STOCK':
@@ -744,12 +851,30 @@ class _AlertsPageState extends State<AlertsPage> {
     }
   }
 
-  String _getAlertTitle(String type) {
-    switch (type) {
-      case 'EXPIRED':
+  String _getAlertTitle(String type, Map<String, dynamic> alert) {
+    // ✅ NOUVEAU : Vérifier dynamiquement si le produit est expiré
+    if (type == 'EXPIRY_SOON' || type == 'EXPIRED') {
+      final message = alert['message'] ?? '';
+
+      // Détecter si c'est réellement expiré dans le message
+      if (message.contains('a expiré') ||
+          message.contains('expirés') ||
+          message.contains('expiré il y a')) {
         return 'Produit expiré';
-      case 'EXPIRY_SOON':
-        return 'Expiration proche';
+      }
+
+      // Détecter si c'est aujourd'hui
+      if (message.contains('expire AUJOURD\'HUI') ||
+          message.contains('expire aujourd\'hui')) {
+        return 'Expire aujourd\'hui !';
+      }
+
+      // Sinon c'est bientôt
+      return 'Expiration proche';
+    }
+
+    // Autres types d'alertes
+    switch (type) {
       case 'LOST_ITEM':
         return 'Objet non détecté';
       case 'LOW_STOCK':

@@ -9,6 +9,7 @@ import 'package:user_smartfridge/screens/dashboard.dart';
 import 'package:user_smartfridge/screens/inventory.dart';
 import 'package:user_smartfridge/screens/profile.dart';
 import 'package:user_smartfridge/screens/recipes.dart';
+import 'package:user_smartfridge/screens/search_inventory.dart';
 import 'package:user_smartfridge/screens/shopping_list.dart';
 import 'package:user_smartfridge/service/api.dart';
 import 'package:user_smartfridge/service/fridge.dart';
@@ -40,11 +41,9 @@ class SmartFridgeClientApp extends StatelessWidget {
         return MaterialApp(
           title: 'Smart Fridge',
           debugShowCheckedModeBanner: false,
-
           theme: ThemeSwitcher.lightTheme,
           darkTheme: ThemeSwitcher.darkTheme,
           themeMode: ThemeSwitcher().themeMode,
-
           home: const AuthWrapper(),
         );
       },
@@ -99,9 +98,9 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late int _currentIndex;
   int _pendingShoppingListsCount = 0;
-  int _pendingAlertsCount = 0; // ✅ NOUVEAU
-  int _expiringItemsCount = 0; // ✅ NOUVEAU
-  int? _selectedFridgeId; // ✅ NOUVEAU
+  int _pendingAlertsCount = 0;
+  int _expiringItemsCount = 0;
+  int? _selectedFridgeId;
 
   final List<Widget> _pages = const [
     DashboardPage(),
@@ -116,11 +115,10 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
-    _initializeFridgeAndBadges(); // ✅ NOUVEAU
-    _listenToFridgeChanges(); // ✅ NOUVEAU
+    _initializeFridgeAndBadges();
+    _listenToFridgeChanges();
   }
 
-  // ✅ NOUVEAU : Initialiser le frigo au démarrage
   Future<void> _initializeFridgeAndBadges() async {
     try {
       final api = ClientApiService();
@@ -128,7 +126,6 @@ class _HomePageState extends State<HomePage> {
 
       if (fridges.isEmpty) return;
 
-      // Récupérer le frigo sauvegardé ou prendre le premier
       final fridgeService = FridgeService();
       int? savedFridgeId = await fridgeService.getSelectedFridge();
 
@@ -140,24 +137,21 @@ class _HomePageState extends State<HomePage> {
         await fridgeService.setSelectedFridge(_selectedFridgeId!);
       }
 
-      // Charger tous les badges
       await _loadAllBadges();
     } catch (e) {
       print('❌ Erreur initialisation: $e');
     }
   }
 
-  // ✅ NOUVEAU : Écouter les changements de frigo
   void _listenToFridgeChanges() {
     FridgeService().fridgeStream.listen((fridgeId) {
       if (fridgeId != null && fridgeId != _selectedFridgeId) {
         _selectedFridgeId = fridgeId;
-        _loadAllBadges(); // Recharger tous les badges
+        _loadAllBadges();
       }
     });
   }
 
-  // ✅ NOUVEAU : Charger tous les badges
   Future<void> _loadAllBadges() async {
     await Future.wait([
       _loadPendingShoppingListsCount(),
@@ -189,7 +183,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ✅ NOUVEAU : Charger les alertes en attente
   Future<void> _loadPendingAlertsCount() async {
     if (_selectedFridgeId == null) return;
 
@@ -205,7 +198,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ✅ NOUVEAU : Charger les items expirant bientôt
   Future<void> _loadExpiringItemsCount() async {
     if (_selectedFridgeId == null) return;
 
@@ -213,92 +205,191 @@ class _HomePageState extends State<HomePage> {
       final api = ClientApiService();
       final inventory = await api.getInventory(_selectedFridgeId!);
 
-      final expiringCount = inventory.where((item) {
+      final criticalCount = inventory.where((item) {
         final status = item['freshness_status'];
-        return status == 'expiring_soon' || status == 'expires_today';
+        return status == 'expiring_soon' ||
+            status == 'expires_today' ||
+            status == 'expired';
       }).length;
 
       if (mounted) {
-        setState(() => _expiringItemsCount = expiringCount);
+        setState(() => _expiringItemsCount = criticalCount);
       }
     } catch (e) {
       print('❌ Erreur chargement inventaire: $e');
     }
   }
 
+  // ✅ NOUVEAU : Navigation vers la recherche vocale
+  void _navigateToSearch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SearchInventoryPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(index: _currentIndex, children: _pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
+      // ✅ NOUVEAU : Floating Action Button pour le micro
+      floatingActionButton: _buildFloatingMicButton(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      // ✅ NOUVEAU : BottomAppBar avec encoche
+      bottomNavigationBar: _buildBottomAppBar(),
+    );
+  }
+
+  // ✅ NOUVEAU : Bouton micro flottant
+  Widget _buildFloatingMicButton() {
+    return Container(
+      width: 70,
+      height: 70,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).colorScheme.primary,
+            Theme.of(context).colorScheme.primary.withOpacity(0.8),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.4),
+            blurRadius: 20,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _navigateToSearch,
+          customBorder: const CircleBorder(),
+          child: const Icon(Icons.mic, color: Colors.white, size: 32),
+        ),
+      ),
+    );
+  }
+
+  // ✅ NOUVEAU : BottomAppBar personnalisé
+  Widget _buildBottomAppBar() {
+    return BottomAppBar(
+      height: 70,
+      padding: EdgeInsets.zero,
+      color: Theme.of(context).cardColor,
+      shape: const CircularNotchedRectangle(),
+      notchMargin: 8.0,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          // Première moitié (3 icônes)
+          _buildNavItem(
+            Icons.dashboard_outlined,
+            Icons.dashboard,
+            'Accueil',
+            0,
+          ),
+          _buildNavItem(
+            Icons.inventory_2_outlined,
+            Icons.inventory_2,
+            'Inventaire',
+            1,
+            badge: _expiringItemsCount,
+          ),
+          _buildNavItem(
+            Icons.restaurant_menu_outlined,
+            Icons.restaurant_menu,
+            'Recettes',
+            2,
+          ),
+
+          // Espace pour le FAB
+          const SizedBox(width: 70),
+
+          // Deuxième moitié (3 icônes)
+          _buildNavItem(
+            Icons.shopping_cart_outlined,
+            Icons.shopping_cart,
+            'Courses',
+            3,
+            badge: _pendingShoppingListsCount,
+          ),
+          _buildNavItem(
+            Icons.notifications_outlined,
+            Icons.notifications,
+            'Alertes',
+            4,
+            badge: _pendingAlertsCount,
+          ),
+          _buildNavItem(Icons.person_outline, Icons.person, 'Profil', 5),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavItem(
+    IconData icon,
+    IconData selectedIcon,
+    String label,
+    int index, {
+    int? badge,
+  }) {
+    final isSelected = _currentIndex == index;
+
+    return Expanded(
+      child: InkWell(
+        onTap: () {
           setState(() => _currentIndex = index);
 
           // Recharger les badges quand on change d'onglet
-          if (index == 1) _loadExpiringItemsCount(); // Inventaire
-          if (index == 3) _loadPendingShoppingListsCount(); // Courses
-          if (index == 4) _loadPendingAlertsCount(); // Alertes
+          if (index == 1) _loadExpiringItemsCount();
+          if (index == 3) _loadPendingShoppingListsCount();
+          if (index == 4) _loadPendingAlertsCount();
         },
-        destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Accueil',
+        child: Container(
+          height: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              badge != null && badge > 0
+                  ? Badge(
+                      label: Text('$badge'),
+                      child: Icon(
+                        isSelected ? selectedIcon : icon,
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                        size: 24,
+                      ),
+                    )
+                  : Icon(
+                      isSelected ? selectedIcon : icon,
+                      color: isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                      size: 24,
+                    ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
-          // ✅ Badge pour inventaire
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: _expiringItemsCount > 0,
-              label: Text('$_expiringItemsCount'),
-              child: const Icon(Icons.inventory_2_outlined),
-            ),
-            selectedIcon: Badge(
-              isLabelVisible: _expiringItemsCount > 0,
-              label: Text('$_expiringItemsCount'),
-              child: const Icon(Icons.inventory_2),
-            ),
-            label: 'Inventaire',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.restaurant_menu_outlined),
-            selectedIcon: Icon(Icons.restaurant_menu),
-            label: 'Recettes',
-          ),
-          // ✅ Badge pour courses
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: _pendingShoppingListsCount > 0,
-              label: Text('$_pendingShoppingListsCount'),
-              child: const Icon(Icons.shopping_cart_outlined),
-            ),
-            selectedIcon: Badge(
-              isLabelVisible: _pendingShoppingListsCount > 0,
-              label: Text('$_pendingShoppingListsCount'),
-              child: const Icon(Icons.shopping_cart),
-            ),
-            label: 'Courses',
-          ),
-          // ✅ Badge pour alertes
-          NavigationDestination(
-            icon: Badge(
-              isLabelVisible: _pendingAlertsCount > 0,
-              label: Text('$_pendingAlertsCount'),
-              child: const Icon(Icons.notifications_outlined),
-            ),
-            selectedIcon: Badge(
-              isLabelVisible: _pendingAlertsCount > 0,
-              label: Text('$_pendingAlertsCount'),
-              child: const Icon(Icons.notifications),
-            ),
-            label: 'Alertes',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Profil',
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -26,10 +26,11 @@ class ClientApiService {
     _accessToken = prefs.getString('access_token');
     _refreshToken = prefs.getString('refresh_token');
     _isInitialized = true;
-    if (kDebugMode)
+    if (kDebugMode) {
       print(
         '✅ API Service initialized - Token present: ${_accessToken != null}',
       );
+    }
   }
 
   Future<bool> isAuthenticated() async {
@@ -178,9 +179,9 @@ class ClientApiService {
 
       if (response.statusCode == 401 && retryCount == 0) {
         final refreshed = await _refreshAccessToken();
-        if (refreshed)
+        if (refreshed) {
           return await _makeAuthenticatedRequest(request, retryCount: 1);
-        else {
+        } else {
           await logout();
           onSessionExpired?.call();
           throw SessionExpiredException('Session expirée - Reconnectez-vous');
@@ -196,7 +197,6 @@ class ClientApiService {
     }
   }
 
-  // ================== USER ==================
   Future<Map<String, dynamic>> getCurrentUser() async {
     final response = await _makeAuthenticatedRequest(
       (headers) => http
@@ -216,8 +216,9 @@ class ClientApiService {
     final body = <String, dynamic>{};
     if (name != null) body['name'] = name;
     if (preferredCuisine != null) body['preferred_cuisine'] = preferredCuisine;
-    if (dietaryRestrictions != null)
+    if (dietaryRestrictions != null) {
       body['dietary_restrictions'] = dietaryRestrictions;
+    }
     if (timezone != null) body['timezone'] = timezone;
 
     final response = await _makeAuthenticatedRequest(
@@ -233,7 +234,6 @@ class ClientApiService {
     throw Exception('Échec de mise à jour');
   }
 
-  // ================== FRIDGE ==================
   Future<Map<String, dynamic>> pairFridge({
     required String pairingCode,
     String? fridgeName,
@@ -253,9 +253,9 @@ class ClientApiService {
           .timeout(timeout),
     );
 
-    if (response.statusCode == 200)
+    if (response.statusCode == 200) {
       return json.decode(response.body);
-    else if (response.statusCode == 404)
+    } else if (response.statusCode == 404)
       throw Exception('Code invalide ou expiré');
     else
       throw Exception(
@@ -286,7 +286,6 @@ class ClientApiService {
     throw Exception('Frigo non trouvé');
   }
 
-  // ================== INVENTORY ==================
   Future<List<dynamic>> getInventory(int fridgeId) async {
     final response = await _makeAuthenticatedRequest(
       (headers) => http
@@ -303,7 +302,6 @@ class ClientApiService {
     throw Exception('Erreur ${response.statusCode}');
   }
 
-  /// 🆕 NOUVELLE MÉTHODE: Ajouter un item avec création de produit possible
   Future<Map<String, dynamic>> addInventoryItem({
     required int fridgeId,
     int? productId,
@@ -315,12 +313,9 @@ class ClientApiService {
   }) async {
     final body = <String, dynamic>{'quantity': quantity};
 
-    // Mode 1: Produit existant
     if (productId != null) {
       body['product_id'] = productId;
-    }
-    // Mode 2: Nouveau produit
-    else if (productName != null && productName.isNotEmpty) {
+    } else if (productName != null && productName.isNotEmpty) {
       body['product_name'] = productName;
       if (category != null) body['category'] = category;
     }
@@ -354,8 +349,9 @@ class ClientApiService {
   }) async {
     final body = <String, dynamic>{};
     if (quantity != null) body['quantity'] = quantity;
-    if (expiryDate != null)
+    if (expiryDate != null) {
       body['expiry_date'] = expiryDate.toIso8601String().split('T')[0];
+    }
     final response = await _makeAuthenticatedRequest(
       (headers) => http
           .put(
@@ -400,11 +396,11 @@ class ClientApiService {
     if (response.statusCode != 204) throw Exception('Échec de suppression');
   }
 
-  // ================== PRODUCTS ==================
   Future<List<dynamic>> getProducts({String? search}) async {
     var url = '$baseUrl/products?limit=200';
-    if (search != null && search.isNotEmpty)
+    if (search != null && search.isNotEmpty) {
       url += '&search=${Uri.encodeComponent(search)}';
+    }
     final response = await _makeAuthenticatedRequest(
       (headers) => http.get(Uri.parse(url), headers: headers).timeout(timeout),
     );
@@ -415,7 +411,6 @@ class ClientApiService {
     throw Exception('Erreur ${response.statusCode}');
   }
 
-  // ================== ALERTS ==================
   Future<List<dynamic>> getAlerts(int fridgeId, {String? status}) async {
     var url = '$baseUrl/fridges/$fridgeId/alerts';
     if (status != null) url += '?status=$status';
@@ -445,8 +440,6 @@ class ClientApiService {
     );
     if (response.statusCode != 200) throw Exception('Échec de mise à jour');
   }
-
-  // ================== RECIPES ==================
 
   Future<Map<String, dynamic>> saveSuggestedRecipe(
     Map<String, dynamic> suggestion,
@@ -559,7 +552,6 @@ class ClientApiService {
     throw Exception('Échec de suggestion: ${response.statusCode}');
   }
 
-  // ================== SHOPPING LIST ==================
   Future<Map<String, dynamic>> generateShoppingList({
     required int fridgeId,
     List<int>? recipeIds,
@@ -582,11 +574,10 @@ class ClientApiService {
   Future<Map<String, dynamic>> generateShoppingListFromIngredients({
     required int fridgeId,
     required List<Map<String, dynamic>> ingredients,
-    int? recipeId, // ✅ NOUVEAU paramètre
+    int? recipeId,
   }) async {
     final body = {'fridge_id': fridgeId, 'ingredients': ingredients};
 
-    // ✅ Ajouter recipe_id si fourni
     if (recipeId != null) {
       body['recipe_id'] = recipeId;
     }
@@ -618,9 +609,6 @@ class ClientApiService {
     return _accessToken;
   }
 
-  // ================== SHOPPING LISTS ==================
-
-  /// Récupère toutes les listes de courses de l'utilisateur
   Future<List<dynamic>> getShoppingLists({
     int? fridgeId,
     String sortBy = 'date',
@@ -640,7 +628,6 @@ class ClientApiService {
     throw Exception('Erreur ${response.statusCode}');
   }
 
-  /// Récupère une liste de courses spécifique
   Future<Map<String, dynamic>> getShoppingList(int listId) async {
     final response = await _makeAuthenticatedRequest(
       (headers) => http
@@ -652,7 +639,6 @@ class ClientApiService {
     throw Exception('Liste non trouvée');
   }
 
-  /// Crée une liste de courses manuelle vide
   Future<Map<String, dynamic>> createEmptyShoppingList(int fridgeId) async {
     final response = await _makeAuthenticatedRequest(
       (headers) => http
@@ -668,7 +654,6 @@ class ClientApiService {
     throw Exception('Échec de création');
   }
 
-  /// Ajoute un article à une liste existante
   Future<void> addItemToShoppingList({
     required int listId,
     required int productId,
@@ -692,7 +677,6 @@ class ClientApiService {
     if (response.statusCode != 201) throw Exception('Échec d\'ajout');
   }
 
-  /// Met à jour le statut d'un article (pending, purchased, cancelled)
   Future<void> updateShoppingListItemStatus({
     required int listId,
     required int itemId,
@@ -703,7 +687,7 @@ class ClientApiService {
           .put(
             Uri.parse('$baseUrl/shopping-lists/$listId/items/$itemId/status'),
             headers: headers,
-            body: json.encode({'status': status}), // ✅ Envoyer en JSON
+            body: json.encode({'status': status}),
           )
           .timeout(timeout),
     );
@@ -711,7 +695,6 @@ class ClientApiService {
     if (response.statusCode != 200) throw Exception('Échec de mise à jour');
   }
 
-  /// Supprime un article d'une liste
   Future<void> deleteShoppingListItem({
     required int listId,
     required int itemId,
@@ -728,7 +711,6 @@ class ClientApiService {
     if (response.statusCode != 204) throw Exception('Échec de suppression');
   }
 
-  /// Supprime une liste complète
   Future<void> deleteShoppingList({required int listId}) async {
     final response = await _makeAuthenticatedRequest(
       (headers) => http
@@ -742,7 +724,6 @@ class ClientApiService {
     if (response.statusCode != 204) throw Exception('Échec de suppression');
   }
 
-  /// Marque tous les articles d'une liste comme achetés
   Future<void> markAllAsPurchased(int listId) async {
     final response = await _makeAuthenticatedRequest(
       (headers) => http
@@ -758,7 +739,6 @@ class ClientApiService {
     }
   }
 
-  /// Génère une liste automatique basée sur l'inventaire faible
   Future<Map<String, dynamic>> generateAutoShoppingList(int fridgeId) async {
     final response = await _makeAuthenticatedRequest(
       (headers) => http
@@ -774,26 +754,20 @@ class ClientApiService {
     throw Exception('Échec de génération');
   }
 
-  // Dans api.dart - Remplacez la méthode createShoppingListWithItems
-
-  /// Crée une liste de courses avec des articles (existants ou personnalisés)
   Future<Map<String, dynamic>> createShoppingListWithItems({
     required int fridgeId,
     required List<Map<String, dynamic>> items,
+    required String name,
   }) async {
-    // Construire les items au format attendu par l'API
     final formattedItems = items.map((item) {
       final Map<String, dynamic> formattedItem = {
         'quantity': (item['quantity'] as num).toDouble(),
         'unit': item['unit'] ?? 'pièce',
       };
 
-      // ✅ Si c'est un produit existant (sélectionné), envoyer product_id
       if (item['product_id'] != null) {
         formattedItem['product_id'] = item['product_id'];
-      }
-      // ✅ Si c'est un produit personnalisé (saisie libre), envoyer product_name
-      else if (item['custom_name'] != null || item['product_name'] != null) {
+      } else if (item['custom_name'] != null || item['product_name'] != null) {
         formattedItem['product_name'] =
             item['custom_name'] ?? item['product_name'];
       }
@@ -801,25 +775,33 @@ class ClientApiService {
       return formattedItem;
     }).toList();
 
-    print('📤 Sending to API: fridge_id=$fridgeId, items=$formattedItems');
+    final body = <String, dynamic>{
+      'fridge_id': fridgeId,
+      'items': formattedItems,
+    };
+
+    if (name != null && name.trim().isNotEmpty) {
+      body['name'] = name.trim();
+    }
+
+    print('Sending to API: $body');
 
     final response = await _makeAuthenticatedRequest(
       (headers) => http
           .post(
             Uri.parse('$baseUrl/shopping-lists'),
             headers: headers,
-            body: json.encode({'fridge_id': fridgeId, 'items': formattedItems}),
+            body: json.encode(body),
           )
           .timeout(timeout),
     );
 
-    print('📥 Response: ${response.statusCode} - ${response.body}');
+    print('Response ${response.statusCode}: ${response.body}');
 
     if (response.statusCode == 201) {
       return json.decode(response.body);
     }
 
-    // Afficher l'erreur détaillée
     final error = json.decode(response.body);
     throw Exception(
       error['detail'] ?? 'Échec de création: ${response.statusCode}',
@@ -849,6 +831,61 @@ class ClientApiService {
     if (response.statusCode != 201) {
       final error = json.decode(response.body);
       throw Exception(error['detail'] ?? 'Échec d\'ajout');
+    }
+  }
+
+  Future<Map<String, dynamic>> searchInventoryWithAI({
+    required int fridgeId,
+    required String query,
+  }) async {
+    final response = await _makeAuthenticatedRequest(
+      (headers) => http
+          .post(
+            Uri.parse('$baseUrl/fridges/$fridgeId/search'),
+            headers: headers,
+            body: json.encode({'query': query}),
+          )
+          .timeout(const Duration(seconds: 30)),
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    throw Exception('Échec de recherche: ${response.statusCode}');
+  }
+
+  Future<List<dynamic>> getSearchHistory({
+    required int fridgeId,
+    int limit = 50,
+  }) async {
+    final response = await _makeAuthenticatedRequest(
+      (headers) => http
+          .get(
+            Uri.parse('$baseUrl/fridges/$fridgeId/search/history?limit=$limit'),
+            headers: headers,
+          )
+          .timeout(timeout),
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return data is List ? data : [];
+    }
+    throw Exception('Erreur ${response.statusCode}');
+  }
+
+  Future<void> clearSearchHistory({required int fridgeId}) async {
+    final response = await _makeAuthenticatedRequest(
+      (headers) => http
+          .delete(
+            Uri.parse('$baseUrl/fridges/$fridgeId/search/history'),
+            headers: headers,
+          )
+          .timeout(timeout),
+    );
+
+    if (response.statusCode != 204) {
+      throw Exception('Échec de suppression');
     }
   }
 }

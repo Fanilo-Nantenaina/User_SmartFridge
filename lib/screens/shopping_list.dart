@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/service/api.dart';
@@ -59,7 +60,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     _fridgeSubscription = _fridgeService.fridgeStream.listen((fridgeId) {
       if (fridgeId != null && fridgeId != _selectedFridgeId) {
         _selectedFridgeId = fridgeId;
-        _loadShoppingLists(); // Nom de ta méthode de chargement
+        _loadShoppingLists();
       }
     });
 
@@ -139,7 +140,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
 
       final lists = await _api.getShoppingLists(
         fridgeId: _selectedFridgeId,
-        sortBy: _currentSort, // ✅ NOUVEAU
+        sortBy: _currentSort,
         sortOrder: _sortOrder,
       );
       setState(() {
@@ -204,7 +205,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     );
   }
 
-  /// Vérifie si une liste est modifiable (seulement les listes manuelles)
   bool _isListEditable(Map<String, dynamic> list) {
     final generatedBy = list['generated_by'] ?? 'manual';
     return generatedBy == 'manual';
@@ -325,7 +325,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.sort), // ✅ NOUVEAU
+            icon: const Icon(Icons.sort),
             onPressed: _showSortOptions,
             tooltip: 'Trier',
           ),
@@ -705,10 +705,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     );
   }
 
-  // ════════════════════════════════════════════════════════════════════════
-  // DIALOG AMÉLIORÉ : Création de nouvelle liste
-  // ════════════════════════════════════════════════════════════════════════
-
   Future<void> _showCreateListDialog() async {
     if (_selectedFridgeId == null) return;
 
@@ -724,7 +720,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
         ),
         child: Column(
           children: [
-            // Handle
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -913,10 +908,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     );
   }
 
-  // ════════════════════════════════════════════════════════════════════════
-  // CRÉATION DE LISTE MANUELLE AMÉLIORÉE
-  // ════════════════════════════════════════════════════════════════════════
-
   Future<void> _createManualList() async {
     if (_selectedFridgeId == null) {
       _showError('Aucun frigo sélectionné');
@@ -924,6 +915,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     }
 
     List<Map<String, dynamic>> tempItems = [];
+    String listName = '';
 
     await showModalBottomSheet(
       context: context,
@@ -938,7 +930,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
           ),
           child: Column(
             children: [
-              // Header
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -1005,7 +996,23 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                 ),
               ),
               const Divider(height: 1),
-              // Bouton Ajouter
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: TextField(
+                  onChanged: (value) => setDialogState(() => listName = value),
+                  decoration: InputDecoration(
+                    labelText: 'Nom de la liste',
+                    hintText: 'Ex: Courses hebdomadaires',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: const Icon(Icons.label_outline),
+                  ),
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: SizedBox(
@@ -1031,7 +1038,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                   ),
                 ),
               ),
-              // Liste des articles
               Expanded(
                 child: tempItems.isEmpty
                     ? Center(
@@ -1039,97 +1045,44 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              Icons.shopping_basket_outlined,
+                              Icons.shopping_cart_outlined,
                               size: 64,
-                              color: Colors.grey.shade400,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                             const SizedBox(height: 16),
-                            Text(
-                              'Aucun article',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Appuyez sur le bouton ci-dessus\npour ajouter des articles',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
+                            const Text('Ajoutez des articles à votre liste'),
                           ],
                         ),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: tempItems.length,
                         itemBuilder: (context, index) {
                           final item = tempItems[index];
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(12),
+                          final name =
+                              item['custom_name'] ?? item['product_name'];
+                          return ListTile(
+                            leading: const Icon(Icons.shopping_bag_outlined),
+                            title: Text(name),
+                            subtitle: Text(
+                              '${item['quantity']} ${item['unit']}',
                             ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
+                            trailing: IconButton(
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
                               ),
-                              leading: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(
-                                  Icons.shopping_basket_outlined,
-                                  color: Theme.of(context).colorScheme.primary,
-                                  size: 22,
-                                ),
-                              ),
-                              title: Text(
-                                item['product_name'] ??
-                                    item['custom_name'] ??
-                                    'Article',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              subtitle: Text(
-                                '${item['quantity']} ${item['unit']}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Theme.of(
-                                    context,
-                                  ).textTheme.bodyMedium?.color,
-                                ),
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.red,
-                                ),
-                                onPressed: () => setDialogState(
-                                  () => tempItems.removeAt(index),
-                                ),
+                              onPressed: () => setDialogState(
+                                () => tempItems.removeAt(index),
                               ),
                             ),
                           );
                         },
                       ),
               ),
-              // Footer avec bouton de création
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Theme.of(context).cardColor,
                   boxShadow: [
@@ -1144,16 +1097,19 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: tempItems.isEmpty
+                      onPressed: tempItems.isEmpty || listName.trim().isEmpty
                           ? null
-                          : () => _saveManualList(tempItems),
-                      icon: const Icon(Icons.check),
-                      label: Text('Créer la liste (${tempItems.length})'),
+                          : () {
+                              Navigator.pop(context);
+                              _saveManualList(
+                                tempItems,
+                                listName.trim(),
+                              );
+                            },
+                      icon: const Icon(Icons.save),
+                      label: const Text('Créer la liste'),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.grey.shade300,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -1170,7 +1126,61 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     );
   }
 
-  /// Dialog amélioré pour ajouter un article (saisie libre + sélection)
+  Future<void> _saveManualList(
+    List<Map<String, dynamic>> items,
+    String name,
+  ) async {
+    if (items.isEmpty) {
+      _showError('Ajoutez au moins un article à la liste');
+      return;
+    }
+
+    final String finalName = name.trim().isNotEmpty == true
+        ? name.trim()
+        : 'Liste manuelle du ${_formatDate(DateTime.now())}';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Création de la liste...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      await _api.createShoppingListWithItems(
+        fridgeId: _selectedFridgeId!,
+        items: items,
+        name: finalName,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pop(context);
+      Navigator.pop(context);
+
+      _showSuccess('Liste "$finalName" créée !');
+
+      await _loadShoppingLists();
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      _showError('Erreur : $e');
+    }
+  }
+
   Future<Map<String, dynamic>?> _showAddItemDialog() async {
     List<dynamic> products = [];
     try {
@@ -1229,7 +1239,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                     ],
                   ),
                 ),
-                // Toggle saisie libre / sélection
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                   child: Container(
@@ -1303,14 +1312,12 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                     ),
                   ),
                 ),
-                // Contenu dynamique
                 Flexible(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Sélection produit OU saisie libre
                         if (isCustomInput)
                           TextField(
                             controller: customNameController,
@@ -1355,18 +1362,15 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                               selectedProduct = value;
                               if (value != null &&
                                   value['default_unit'] != null) {
-                                // Vérifier si l'unité par défaut existe dans la liste
                                 final defaultUnit =
                                     value['default_unit'] as String;
                                 if (_availableUnits.contains(defaultUnit)) {
                                   selectedUnit = defaultUnit;
                                 }
-                                // Sinon, on garde 'pièce' comme valeur par défaut
                               }
                             }),
                           ),
                         const SizedBox(height: 16),
-                        // Quantité et Unité
                         Row(
                           children: [
                             Expanded(
@@ -1494,67 +1498,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     );
   }
 
-  // Dans shopping_list.dart - Remplacez _saveManualList par cette version
-
-  Future<void> _saveManualList(List<Map<String, dynamic>> items) async {
-    Navigator.pop(context); // Fermer le dialog de création
-
-    if (items.isEmpty) {
-      _showError('Ajoutez au moins un article à la liste');
-      return;
-    }
-
-    // ✅ DEBUG : Vérifier ce qu'on a dans items
-    print('📦 Items à sauvegarder: ${items.length}');
-    for (var item in items) {
-      print(
-        '  - ${item['product_name'] ?? item['custom_name']}: product_id=${item['product_id']}, is_custom=${item['is_custom']}',
-      );
-    }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Création de la liste...'),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    try {
-      // ✅ Envoyer TOUS les items (existants ET personnalisés)
-      final response = await _api.createShoppingListWithItems(
-        fridgeId: _selectedFridgeId!,
-        items: items, // Plus de filtrage, on envoie tout
-      );
-
-      if (!mounted) return;
-      Navigator.pop(context);
-      _showSuccess('Liste créée avec ${items.length} article(s) !');
-      _loadShoppingLists();
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context);
-      _showError('Erreur: $e');
-      print('❌ Erreur création liste: $e');
-    }
-  }
-
-  // ════════════════════════════════════════════════════════════════════════
-  // DÉTAILS DE LA LISTE AVEC GESTION DE L'ÉDITION
-  // ════════════════════════════════════════════════════════════════════════
-
   void _showListDetails(
     Map<String, dynamic> list, {
     required bool isCompleted,
@@ -1652,7 +1595,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                             ],
                           ),
                         ),
-                        // Bouton ajouter (seulement si modifiable)
                         if (!isCompleted && isEditable)
                           IconButton(
                             icon: const Icon(Icons.add_circle_outline),
@@ -1666,7 +1608,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                           ),
                       ],
                     ),
-                    // Info si non modifiable
                     if (!isEditable) ...[
                       const SizedBox(height: 12),
                       Container(
@@ -1703,7 +1644,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                 ),
               ),
               const Divider(height: 1),
-              // Liste des articles
               Expanded(
                 child: items.isEmpty
                     ? Center(
@@ -1874,16 +1814,13 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     );
 
     try {
-      // ✅ Si c'est un article personnalisé (saisie libre)
       if (item['is_custom'] == true) {
         final productName = item['custom_name'] ?? item['product_name'];
 
-        // Créer d'abord le produit via l'API products
         final products = await _api.getProducts(search: productName);
 
         int productId;
 
-        // Chercher si un produit similaire existe déjà
         final existingProduct = products.firstWhere(
           (p) =>
               (p['name'] as String).toLowerCase() ==
@@ -1894,10 +1831,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
         if (existingProduct != null) {
           productId = existingProduct['id'];
         } else {
-          // Créer le produit via l'inventaire (qui crée automatiquement le produit)
-          // Ou utiliser une route dédiée si disponible
-
-          // ✅ Alternative : Ajouter via une route qui accepte product_name
           await _api.addItemToShoppingListWithName(
             listId: listId,
             productName: productName,
@@ -1912,7 +1845,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
           return;
         }
 
-        // Si on a trouvé un produit existant
         await _api.addItemToShoppingList(
           listId: listId,
           productId: productId,
@@ -1920,7 +1852,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
           unit: item['unit'],
         );
       } else {
-        // ✅ Article sélectionné depuis la liste (a un product_id)
         await _api.addItemToShoppingList(
           listId: listId,
           productId: item['product_id'],
@@ -1939,10 +1870,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
       _showError('Erreur: $e');
     }
   }
-
-  // ════════════════════════════════════════════════════════════════════════
-  // AUTRES MÉTHODES (génération IA, recettes, etc.)
-  // ════════════════════════════════════════════════════════════════════════
 
   Future<void> _generateAIList() async {
     if (_selectedFridgeId == null) {
@@ -2085,129 +2012,219 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
 
     try {
       recipes = await _api.getRecipes();
-    } catch (e) {
-      _showError('Erreur de chargement des recettes : $e');
-      return;
-    }
+      final totalRecipes = recipes.length;
 
-    if (recipes.isEmpty) {
-      _showError('Aucune recette disponible');
-      return;
-    }
+      if (kDebugMode) {
+        print('🔍 DEBUG: Total recettes récupérées: $totalRecipes');
+        print(
+          '🔍 DEBUG: IDs des recettes: ${recipes.map((r) => r['id']).toList()}',
+        );
+      }
 
-    await showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.restaurant, color: Color(0xFFF59E0B)),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(child: Text('Choisir des recettes')),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 400,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      final shoppingLists = await _api.getShoppingLists(
+        fridgeId: _selectedFridgeId,
+      );
+
+      if (kDebugMode) {
+        print('🔍 DEBUG: Total listes de courses: ${shoppingLists.length}');
+        print('🔍 DEBUG: Contenu des listes:');
+        for (var list in shoppingLists) {
+          print(
+            '   - Liste ID: ${list['id']}, '
+            'recipe_id: ${list['recipe_id']}, '
+            'status: ${list['status']}, '
+            'generated_by: ${list['generated_by']}',
+          );
+        }
+      }
+
+      final activeLists = shoppingLists.where((list) {
+        final status = list['status'] as String?;
+        return status != 'cancelled';
+      }).toList();
+
+      final Set<int> recipesWithActiveLists = activeLists
+          .where((list) => list['recipe_id'] != null)
+          .map<int>((list) => list['recipe_id'] as int)
+          .toSet();
+
+      if (kDebugMode) {
+        print(
+          '🔍 DEBUG: Recipe IDs avec liste active: $recipesWithActiveLists',
+        );
+      }
+
+      recipes = recipes.where((recipe) {
+        final recipeId = recipe['id'] as int;
+        final hasActiveListe = recipesWithActiveLists.contains(recipeId);
+
+        if (kDebugMode) {
+          print(
+            '🔍 DEBUG: Recette ${recipe['title']} (ID: $recipeId) '
+            '- A liste active: $hasActiveListe',
+          );
+        }
+
+        return !hasActiveListe;
+      }).toList();
+
+      if (kDebugMode) {
+        print('🔍 DEBUG: Recettes après filtrage: ${recipes.length}');
+        print(
+          '🔍 DEBUG: IDs des recettes filtrées: ${recipes.map((r) => r['id']).toList()}',
+        );
+      }
+
+      if (recipes.isEmpty) {
+        _showError(
+          'Aucune recette disponible.\n'
+          'Toutes vos $totalRecipes recette(s) ont déjà une liste de courses active.\n'
+          'Astuce : Supprimez ou terminez les anciennes listes pour libérer les recettes.',
+        );
+        return;
+      }
+
+      await showDialog(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
               children: [
-                if (selectedRecipeIds.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.check_circle,
-                          color: Color(0xFFF59E0B),
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${selectedRecipeIds.length} recette(s) sélectionnée(s)',
-                          style: const TextStyle(
-                            color: Color(0xFFF59E0B),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  child: const Icon(Icons.restaurant, color: Color(0xFFF59E0B)),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: ListView.builder(
-                    itemCount: recipes.length,
-                    itemBuilder: (context, index) {
-                      final recipe = recipes[index];
-                      final recipeId = recipe['id'] as int;
-                      final isSelected = selectedRecipeIds.contains(recipeId);
-                      return CheckboxListTile(
-                        value: isSelected,
-                        onChanged: (value) => setDialogState(() {
-                          value == true
-                              ? selectedRecipeIds.add(recipeId)
-                              : selectedRecipeIds.remove(recipeId);
-                        }),
-                        activeColor: const Color(0xFFF59E0B),
-                        title: Text(
-                          recipe['title'] ?? 'Recette',
-                          style: const TextStyle(fontWeight: FontWeight.w500),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Choisir des recettes'),
+                      Text(
+                        '${recipes.length}/$totalRecipes recette(s) disponible(s)', // ✅ Affichage du total
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.normal,
+                          color: Colors.grey,
                         ),
-                        subtitle: recipe['description'] != null
-                            ? Text(
-                                recipe['description'],
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12),
-                              )
-                            : null,
-                      );
-                    },
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Annuler'),
-            ),
-            ElevatedButton.icon(
-              onPressed: selectedRecipeIds.isEmpty
-                  ? null
-                  : () async {
-                      Navigator.pop(context);
-                      await _generateListFromRecipes(
-                        selectedRecipeIds.toList(),
-                      );
-                    },
-              icon: const Icon(Icons.check),
-              label: const Text('Générer'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF59E0B),
-                foregroundColor: Colors.white,
-                elevation: 0,
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (selectedRecipeIds.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle,
+                            color: Color(0xFFF59E0B),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${selectedRecipeIds.length} recette(s) sélectionnée(s)',
+                            style: const TextStyle(
+                              color: Color(0xFFF59E0B),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: recipes.length,
+                      itemBuilder: (context, index) {
+                        final recipe = recipes[index];
+                        final recipeId = recipe['id'] as int;
+                        final isSelected = selectedRecipeIds.contains(recipeId);
+
+                        return CheckboxListTile(
+                          value: isSelected,
+                          onChanged: (value) => setDialogState(() {
+                            value == true
+                                ? selectedRecipeIds.add(recipeId)
+                                : selectedRecipeIds.remove(recipeId);
+                          }),
+                          activeColor: const Color(0xFFF59E0B),
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  recipe['title'] ?? 'Recette',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          subtitle: recipe['description'] != null
+                              ? Text(
+                                  recipe['description'],
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 12),
+                                )
+                              : null,
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Annuler'),
+              ),
+              ElevatedButton.icon(
+                onPressed: selectedRecipeIds.isEmpty
+                    ? null
+                    : () async {
+                        Navigator.pop(context);
+                        await _generateListFromRecipes(
+                          selectedRecipeIds.toList(),
+                        );
+                      },
+                icon: const Icon(Icons.check),
+                label: const Text('Générer'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF59E0B),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      _showError('Erreur de chargement des recettes : $e');
+      return;
+    }
   }
 
   Future<void> _generateListFromRecipes(List<int> recipeIds) async {
@@ -2367,7 +2384,6 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     try {
       return DateFormat('d MMMM yyyy', 'fr_FR').format(date);
     } catch (e) {
-      // Fallback si l'initialisation échoue
       return '${date.day}/${date.month}/${date.year}';
     }
   }

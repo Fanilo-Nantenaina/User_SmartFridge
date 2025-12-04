@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:user_smartfridge/screens/auth.dart';
 import 'package:user_smartfridge/screens/search_inventory.dart';
-import 'package:user_smartfridge/screens/shopping_list.dart';
 import 'package:user_smartfridge/service/api.dart';
 import 'package:user_smartfridge/service/fridge.dart';
 import 'package:user_smartfridge/widgets/fridge_selector.dart';
@@ -90,7 +89,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _onFridgeChanged(int fridgeId) async {
     await _fridgeService.setSelectedFridge(fridgeId);
-    // Plus besoin de setState ici, le stream s'en charge
     _loadStats();
   }
 
@@ -481,7 +479,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   Icons.restaurant_menu_outlined,
                   const Color(0xFF8B5CF6),
                   () {
-                    // Naviguer vers l'onglet Recettes
+                    // ✅ CORRIGÉ : Changer l'onglet au lieu de naviguer
                     Navigator.of(context).pushReplacement(
                       MaterialPageRoute(
                         builder: (context) => const HomePage(initialIndex: 2),
@@ -502,10 +500,10 @@ class _DashboardPageState extends State<DashboardPage> {
                   Icons.shopping_cart_outlined,
                   const Color(0xFF10B981),
                   () {
-                    Navigator.push(
-                      context,
+                    // ✅ CORRIGÉ : Changer l'onglet au lieu de naviguer
+                    Navigator.of(context).pushReplacement(
                       MaterialPageRoute(
-                        builder: (context) => const ShoppingListsPage(),
+                        builder: (context) => const HomePage(initialIndex: 3),
                       ),
                     );
                   },
@@ -519,7 +517,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   Icons.notifications_outlined,
                   const Color(0xFFF59E0B),
                   () {
-                    // Naviguer vers l'onglet Alertes
+                    // ✅ CORRIGÉ : Changer l'onglet au lieu de naviguer
                     Navigator.of(context).pushReplacement(
                       MaterialPageRoute(
                         builder: (context) => const HomePage(initialIndex: 4),
