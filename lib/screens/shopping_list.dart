@@ -32,6 +32,8 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
   bool _isLoading = true;
   int? _selectedFridgeId;
 
+  bool _isDiscovering = false;
+
   static const List<String> _availableUnits = [
     'pièce',
     'g',
@@ -1101,10 +1103,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                           ? null
                           : () {
                               Navigator.pop(context);
-                              _saveManualList(
-                                tempItems,
-                                listName.trim(),
-                              );
+                              _saveManualList(tempItems, listName.trim());
                             },
                       icon: const Icon(Icons.save),
                       label: const Text('Créer la liste'),
@@ -1178,6 +1177,379 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
       if (!mounted) return;
       Navigator.pop(context);
       _showError('Erreur : $e');
+    }
+  }
+
+  Future<void> _saveSuggestedList(Map<String, dynamic> suggestion) async {
+    if (_selectedFridgeId == null) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Création de la liste...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final products = (suggestion['suggested_products'] as List).map((p) {
+        return {
+          'product_name': p['name'],
+          'quantity': (p['quantity'] as num).toDouble(),
+          'unit': p['unit'] ?? 'pièce',
+        };
+      }).toList();
+
+      await _api.createShoppingListWithItems(
+        fridgeId: _selectedFridgeId!,
+        items: products,
+        name: 'Liste variée IA',
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Fermer le loading
+
+      _showSuccess('Liste créée avec ${products.length} produits variés !');
+      await _loadShoppingLists();
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      _showError('Erreur : $e');
+    }
+  }
+
+  Future<void> _showSuggestedProductsDialog(
+    Map<String, dynamic> suggestion,
+  ) async {
+    final suggestedProducts =
+        suggestion['suggested_products'] as List<dynamic>? ?? [];
+    final diversityNote = suggestion['diversity_note'] as String? ?? '';
+
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outline.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF8B5CF6),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.auto_awesome,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Suggestions IA',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyLarge?.color,
+                                ),
+                              ),
+                              Text(
+                                '${suggestedProducts.length} produits variés',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyMedium?.color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (diversityNote.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFF8B5CF6).withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.lightbulb_outline,
+                              color: Color(0xFF8B5CF6),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                diversityNote,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.purple.shade700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+
+              // Liste des produits suggérés
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: suggestedProducts.length,
+                  itemBuilder: (context, index) {
+                    final product = suggestedProducts[index];
+                    final name = product['name'] ?? 'Produit';
+                    final category = product['category'] ?? 'Divers';
+                    final quantity = product['quantity'] ?? 1;
+                    final unit = product['unit'] ?? 'pièce';
+                    final reason = product['reason'] ?? '';
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFF8B5CF6).withOpacity(0.2),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFF8B5CF6,
+                                  ).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  _getCategoryIcon(category),
+                                  color: const Color(0xFF8B5CF6),
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(
+                                          context,
+                                        ).textTheme.bodyLarge?.color,
+                                      ),
+                                    ),
+                                    Text(
+                                      category,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.color,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFF8B5CF6,
+                                  ).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  '$quantity $unit',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF8B5CF6),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (reason.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              reason,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.color,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              // Actions
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -5),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _generateAIList();
+                          },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Autre suggestion'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _saveSuggestedList(suggestion);
+                          },
+                          icon: const Icon(Icons.save),
+                          label: const Text('Enregistrer'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF8B5CF6),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _getCategoryIcon(String category) {
+    final categoryLower = category.toLowerCase();
+
+    if (categoryLower.contains('fruit')) {
+      return Icons.apple;
+    } else if (categoryLower.contains('légume') ||
+        categoryLower.contains('legume')) {
+      return Icons.local_florist;
+    } else if (categoryLower.contains('viande') ||
+        categoryLower.contains('poisson')) {
+      return Icons.restaurant;
+    } else if (categoryLower.contains('lait') ||
+        categoryLower.contains('fromage')) {
+      return Icons.egg;
+    } else if (categoryLower.contains('pain') ||
+        categoryLower.contains('céréale')) {
+      return Icons.bakery_dining;
+    } else if (categoryLower.contains('boisson')) {
+      return Icons.local_drink;
+    } else {
+      return Icons.shopping_basket;
     }
   }
 
@@ -1877,130 +2249,27 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
       return;
     }
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Génération de la liste...'),
-                SizedBox(height: 8),
-                Text(
-                  'Analyse de votre inventaire',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    setState(() => _isDiscovering = true);
 
     try {
-      final result = await _api.generateAutoShoppingList(_selectedFridgeId!);
+      final suggestion = await _api.suggestDiverseProducts(_selectedFridgeId!);
+
+      setState(() => _isDiscovering = false);
+
       if (!mounted) return;
-      Navigator.pop(context);
 
-      final itemsCount = (result['items'] as List?)?.length ?? 0;
+      final suggestedProducts =
+          suggestion['suggested_products'] as List<dynamic>? ?? [];
 
-      if (itemsCount == 0) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_circle,
-                    color: Color(0xFF10B981),
-                    size: 32,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('Tout va bien !')),
-              ],
-            ),
-            content: const Text(
-              'Votre inventaire est complet. Aucun produit en stock faible détecté.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Fermer'),
-              ),
-            ],
-          ),
-        );
+      if (suggestedProducts.isEmpty) {
+        _showError(suggestion['message'] ?? 'Aucune suggestion disponible');
         return;
       }
 
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF8B5CF6).withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.auto_awesome,
-                  color: Color(0xFF8B5CF6),
-                  size: 32,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(child: Text('Liste créée !')),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$itemsCount article(s) ajouté(s) basés sur les produits en stock faible.',
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Fermer'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _loadShoppingLists();
-              },
-              style: ElevatedButton.styleFrom(elevation: 0),
-              child: const Text('Voir'),
-            ),
-          ],
-        ),
-      );
-      _loadShoppingLists();
+      _showSuggestedProductsDialog(suggestion);
     } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context);
-      _showError('Erreur lors de la génération : $e');
+      setState(() => _isDiscovering = false);
+      _showError('Erreur : $e');
     }
   }
 

@@ -85,12 +85,12 @@ class _AlertsPageState extends State<AlertsPage> {
             DateTime.tryParse(b['created_at'] ?? '') ?? DateTime.now();
 
         return _sortOrder == 'desc'
-            ? dateB.compareTo(dateA) // Plus récent d'abord
-            : dateA.compareTo(dateB); // Plus ancien d'abord
+            ? dateB.compareTo(dateA)
+            : dateA.compareTo(dateB);
       });
 
       setState(() {
-        _alerts = alerts;
+        _alerts = sortedAlerts;
         _isLoading = false;
       });
     } catch (e) {
@@ -109,6 +109,122 @@ class _AlertsPageState extends State<AlertsPage> {
         _showError('Erreur: $e');
       }
     }
+  }
+
+  // 🆕 Fonction pour extraire la date d'expiration du message d'origine
+  DateTime? _extractExpiryDateFromAlert(Map<String, dynamic> alert) {
+    try {
+      final message = alert['message'] ?? '';
+
+      // Rechercher un pattern de date dans le message
+      final dateMatch = RegExp(
+        r'(\d{1,2})/(\d{1,2})/(\d{4})',
+      ).firstMatch(message);
+      if (dateMatch != null) {
+        final day = int.parse(dateMatch.group(1)!);
+        final month = int.parse(dateMatch.group(2)!);
+        final year = int.parse(dateMatch.group(3)!);
+        return DateTime(year, month, day);
+      }
+
+      // Si pas de date trouvée, essayer avec expiry_date si présent
+      if (alert['expiry_date'] != null) {
+        return DateTime.parse(alert['expiry_date']);
+      }
+    } catch (e) {
+      if (kDebugMode) print('Erreur extraction date: $e');
+    }
+    return null;
+  }
+
+  // 🆕 Fonction pour recalculer le message dynamiquement
+  String _getDynamicAlertMessage(Map<String, dynamic> alert) {
+    final type = alert['type'] ?? '';
+    final isResolved = alert['status'] == 'resolved';
+
+    if (type == 'EXPIRY_SOON' || type == 'EXPIRED') {
+      final expiryDate = _extractExpiryDateFromAlert(alert);
+
+      if (expiryDate != null) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final expiry = DateTime(
+          expiryDate.year,
+          expiryDate.month,
+          expiryDate.day,
+        );
+        final diff = expiry.difference(today).inDays;
+
+        // Extraire le nom du produit du message original
+        final originalMessage = alert['message'] ?? '';
+        String productName = 'Un produit';
+
+        // Essayer d'extraire le nom (format: "Le produit X expire...")
+        final nameMatch = RegExp(
+          r'Le produit (.+?) expire',
+        ).firstMatch(originalMessage);
+        if (nameMatch != null) {
+          productName = nameMatch.group(1)!;
+        }
+
+        // 🆕 Si l'alerte est résolue, afficher la date exacte
+        if (isResolved) {
+          if (diff < 0) {
+            return 'Le produit $productName a expiré le ${expiryDate.day.toString().padLeft(2, '0')}/${expiryDate.month.toString().padLeft(2, '0')}/${expiryDate.year}';
+          } else {
+            return 'Le produit $productName expire le ${expiryDate.day.toString().padLeft(2, '0')}/${expiryDate.month.toString().padLeft(2, '0')}/${expiryDate.year}';
+          }
+        }
+
+        // Pour les alertes actives, message relatif
+        if (diff < 0) {
+          final daysExpired = diff.abs();
+          if (daysExpired == 1) {
+            return 'Le produit $productName a expiré hier';
+          } else {
+            return 'Le produit $productName a expiré il y a $daysExpired jours';
+          }
+        } else if (diff == 0) {
+          return 'Le produit $productName expire AUJOURD\'HUI !';
+        } else if (diff == 1) {
+          return 'Le produit $productName expire demain';
+        } else if (diff <= 3) {
+          return 'Le produit $productName expire dans $diff jours';
+        } else {
+          return 'Le produit $productName expire le ${expiryDate.day}/${expiryDate.month}/${expiryDate.year}';
+        }
+      }
+    }
+
+    // Pour les autres types d'alertes, garder le message original
+    return alert['message'] ?? '';
+  }
+
+  // 🆕 Fonction pour déterminer le statut d'expiration actuel
+  String _getCurrentExpiryStatus(Map<String, dynamic> alert) {
+    final type = alert['type'] ?? '';
+
+    if (type == 'EXPIRY_SOON' || type == 'EXPIRED') {
+      final expiryDate = _extractExpiryDateFromAlert(alert);
+
+      if (expiryDate != null) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final expiry = DateTime(
+          expiryDate.year,
+          expiryDate.month,
+          expiryDate.day,
+        );
+        final diff = expiry.difference(today).inDays;
+
+        if (diff < 0) return 'expired';
+        if (diff == 0) return 'expires_today';
+        if (diff <= 3) return 'expiring_soon';
+        return 'fresh';
+      }
+    }
+
+    return type.toLowerCase();
   }
 
   void _showSortOptions() {
@@ -134,8 +250,6 @@ class _AlertsPageState extends State<AlertsPage> {
               ],
             ),
             const SizedBox(height: 20),
-
-            // Option : Plus récent d'abord
             ListTile(
               leading: const Icon(Icons.arrow_downward),
               title: const Text('Plus récent d\'abord'),
@@ -147,10 +261,7 @@ class _AlertsPageState extends State<AlertsPage> {
                 _loadAlerts();
               },
             ),
-
             const Divider(),
-
-            // Option : Plus ancien d'abord
             ListTile(
               leading: const Icon(Icons.arrow_upward),
               title: const Text('Plus ancien d\'abord'),
@@ -300,7 +411,6 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Widget _buildFilterChips() {
-    // Compter les alertes par statut
     final pendingCount = _alerts.where((a) => a['status'] == 'pending').length;
     final resolvedCount = _alerts
         .where((a) => a['status'] == 'resolved')
@@ -381,7 +491,6 @@ class _AlertsPageState extends State<AlertsPage> {
                 fontSize: 14,
               ),
             ),
-            // ✅ Badge sur le chip
             if (count != null && count > 0) ...[
               const SizedBox(width: 6),
               Container(
@@ -409,10 +518,19 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   Widget _buildAlertCard(Map<String, dynamic> alert) {
-    final type = alert['type'] ?? '';
-    final color = _getAlertColor(type, alert);
-    final icon = _getAlertIcon(type, alert);
-    final title = _getAlertTitle(type, alert);
+    // ✅ Utiliser le statut recalculé dynamiquement
+    final currentStatus = _getCurrentExpiryStatus(alert);
+    final dynamicMessage = _getDynamicAlertMessage(alert);
+    final isResolved = alert['status'] == 'resolved';
+
+    // 🆕 Si résolu, forcer la couleur verte
+    final color = isResolved
+        ? const Color(0xFF10B981)
+        : _getAlertColor(alert['type'], currentStatus);
+    final icon = isResolved
+        ? Icons.check_circle_outline
+        : _getAlertIcon(alert['type'], currentStatus);
+    final title = _getAlertTitle(alert['type'], currentStatus, alert['status']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -453,7 +571,7 @@ class _AlertsPageState extends State<AlertsPage> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        alert['message'] ?? '',
+                        dynamicMessage,
                         style: TextStyle(
                           color: Theme.of(context).textTheme.bodyMedium?.color,
                           fontSize: 13,
@@ -517,6 +635,19 @@ class _AlertsPageState extends State<AlertsPage> {
   }
 
   void _showAlertDetails(Map<String, dynamic> alert) {
+    final currentStatus = _getCurrentExpiryStatus(alert);
+    final dynamicMessage = _getDynamicAlertMessage(alert);
+    final isResolved = alert['status'] == 'resolved';
+
+    // 🆕 Si résolu, forcer la couleur verte
+    final color = isResolved
+        ? const Color(0xFF10B981)
+        : _getAlertColor(alert['type'], currentStatus);
+    final icon = isResolved
+        ? Icons.check_circle_outline
+        : _getAlertIcon(alert['type'], currentStatus);
+    final title = _getAlertTitle(alert['type'], currentStatus, alert['status']);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -547,14 +678,10 @@ class _AlertsPageState extends State<AlertsPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _getAlertColor(alert['type'], alert).withOpacity(0.1),
+                    color: color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(
-                    _getAlertIcon(alert['type'], alert),
-                    color: _getAlertColor(alert['type'], alert),
-                    size: 28,
-                  ),
+                  child: Icon(icon, color: color, size: 28),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -562,11 +689,11 @@ class _AlertsPageState extends State<AlertsPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _getAlertTitle(alert['type'], alert),
+                        title,
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: _getAlertColor(alert['type'], alert),
+                          color: color,
                         ),
                       ),
                       if (alert['created_at'] != null)
@@ -584,7 +711,7 @@ class _AlertsPageState extends State<AlertsPage> {
             ),
             const SizedBox(height: 24),
             Text(
-              alert['message'] ?? '',
+              dynamicMessage,
               style: TextStyle(
                 fontSize: 15,
                 color: Theme.of(context).textTheme.bodyMedium?.color,
@@ -704,14 +831,16 @@ class _AlertsPageState extends State<AlertsPage> {
 
   Widget _buildAlertsList() {
     final criticalAlerts = _alerts
-        .where((a) => a['type'] == 'EXPIRED')
+        .where((a) => _getCurrentExpiryStatus(a) == 'expired')
         .toList();
-    final warningAlerts = _alerts
-        .where((a) => a['type'] == 'EXPIRY_SOON')
-        .toList();
-    final infoAlerts = _alerts
-        .where((a) => !['EXPIRED', 'EXPIRY_SOON'].contains(a['type']))
-        .toList();
+    final warningAlerts = _alerts.where((a) {
+      final status = _getCurrentExpiryStatus(a);
+      return status == 'expires_today' || status == 'expiring_soon';
+    }).toList();
+    final infoAlerts = _alerts.where((a) {
+      final status = _getCurrentExpiryStatus(a);
+      return !['expired', 'expires_today', 'expiring_soon'].contains(status);
+    }).toList();
 
     return RefreshIndicator(
       onRefresh: _loadAlerts,
@@ -792,29 +921,20 @@ class _AlertsPageState extends State<AlertsPage> {
     );
   }
 
-  Color _getAlertColor(String type, Map<String, dynamic> alert) {
-    // ✅ NOUVEAU : Vérifier dynamiquement l'état réel
+  Color _getAlertColor(String type, String currentStatus) {
     if (type == 'EXPIRY_SOON' || type == 'EXPIRED') {
-      final message = alert['message'] ?? '';
-
-      // Si réellement expiré → ROUGE
-      if (message.contains('a expiré') ||
-          message.contains('expirés') ||
-          message.contains('expiré il y a')) {
-        return const Color(0xFFEF4444); // Rouge
+      switch (currentStatus) {
+        case 'expired':
+          return const Color(0xFFEF4444); // Rouge
+        case 'expires_today':
+          return const Color(0xFFEF4444); // Rouge aussi
+        case 'expiring_soon':
+          return const Color(0xFFF59E0B); // Orange
+        default:
+          return const Color(0xFF10B981); // Vert (si frais)
       }
-
-      // Si expire aujourd'hui → ORANGE/ROUGE
-      if (message.contains('expire AUJOURD\'HUI') ||
-          message.contains('expire aujourd\'hui')) {
-        return const Color(0xFFEF4444); // Rouge aussi
-      }
-
-      // Sinon bientôt → ORANGE
-      return const Color(0xFFF59E0B); // Orange
     }
 
-    // Autres types
     switch (type) {
       case 'LOST_ITEM':
         return const Color(0xFFF59E0B);
@@ -825,20 +945,18 @@ class _AlertsPageState extends State<AlertsPage> {
     }
   }
 
-  IconData _getAlertIcon(String type, Map<String, dynamic> alert) {
-    // ✅ NOUVEAU : Icône dynamique selon l'état réel
+  IconData _getAlertIcon(String type, String currentStatus) {
     if (type == 'EXPIRY_SOON' || type == 'EXPIRED') {
-      final message = alert['message'] ?? '';
-
-      if (message.contains('a expiré') || message.contains('expirés')) {
-        return Icons.dangerous_outlined; // Icône danger pour expiré
+      switch (currentStatus) {
+        case 'expired':
+          return Icons.dangerous_outlined; // Danger pour expiré
+        case 'expires_today':
+          return Icons.warning_outlined; // Avertissement urgent
+        case 'expiring_soon':
+          return Icons.schedule_outlined; // Horloge pour bientôt
+        default:
+          return Icons.check_circle_outline;
       }
-
-      if (message.contains('expire AUJOURD\'HUI')) {
-        return Icons.warning_outlined; // Avertissement urgent
-      }
-
-      return Icons.schedule_outlined; // Horloge pour bientôt
     }
 
     switch (type) {
@@ -851,29 +969,42 @@ class _AlertsPageState extends State<AlertsPage> {
     }
   }
 
-  String _getAlertTitle(String type, Map<String, dynamic> alert) {
-    // ✅ NOUVEAU : Vérifier dynamiquement si le produit est expiré
-    if (type == 'EXPIRY_SOON' || type == 'EXPIRED') {
-      final message = alert['message'] ?? '';
-
-      // Détecter si c'est réellement expiré dans le message
-      if (message.contains('a expiré') ||
-          message.contains('expirés') ||
-          message.contains('expiré il y a')) {
-        return 'Produit expiré';
+  String _getAlertTitle(
+    String type,
+    String currentStatus,
+    String? alertStatus,
+  ) {
+    // 🆕 Si l'alerte est résolue, afficher un message approprié
+    if (alertStatus == 'resolved') {
+      if (type == 'EXPIRY_SOON' || type == 'EXPIRED') {
+        switch (currentStatus) {
+          case 'expired':
+            return 'Produit expiré (résolu)';
+          case 'expires_today':
+            return 'Expiration (résolu)';
+          case 'expiring_soon':
+            return 'Alerte traitée';
+          default:
+            return 'Alerte résolue';
+        }
       }
-
-      // Détecter si c'est aujourd'hui
-      if (message.contains('expire AUJOURD\'HUI') ||
-          message.contains('expire aujourd\'hui')) {
-        return 'Expire aujourd\'hui !';
-      }
-
-      // Sinon c'est bientôt
-      return 'Expiration proche';
+      return 'Alerte résolue';
     }
 
-    // Autres types d'alertes
+    // Pour les alertes non résolues, afficher le statut actuel
+    if (type == 'EXPIRY_SOON' || type == 'EXPIRED') {
+      switch (currentStatus) {
+        case 'expired':
+          return 'Produit expiré';
+        case 'expires_today':
+          return 'Expire aujourd\'hui !';
+        case 'expiring_soon':
+          return 'Expiration proche';
+        default:
+          return 'Alerte produit';
+      }
+    }
+
     switch (type) {
       case 'LOST_ITEM':
         return 'Objet non détecté';

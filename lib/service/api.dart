@@ -780,7 +780,7 @@ class ClientApiService {
       'items': formattedItems,
     };
 
-    if (name != null && name.trim().isNotEmpty) {
+    if (name.trim().isNotEmpty) {
       body['name'] = name.trim();
     }
 
@@ -887,6 +887,23 @@ class ClientApiService {
     if (response.statusCode != 204) {
       throw Exception('Échec de suppression');
     }
+  }
+
+  Future<Map<String, dynamic>> suggestDiverseProducts(int fridgeId) async {
+    final response = await _makeAuthenticatedRequest(
+      (headers) => http
+          .post(
+            Uri.parse('$baseUrl/shopping-lists/suggest-products'),
+            headers: headers,
+            body: json.encode({'fridge_id': fridgeId}),
+          )
+          .timeout(const Duration(seconds: 60)),
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    }
+    throw Exception('Échec de suggestion: ${response.statusCode}');
   }
 }
 
