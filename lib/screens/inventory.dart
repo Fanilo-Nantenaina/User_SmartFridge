@@ -38,7 +38,7 @@ class _InventoryPageState extends State<InventoryPage>
     _api.onSessionExpired = _handleSessionExpired;
     _fridgeSubscription = _fridgeService.fridgeStream.listen((fridgeId) {
       if (fridgeId != null && fridgeId != _selectedFridgeId) {
-        print('📦 InventoryPage: Frigo changé -> $fridgeId');
+        print('Frigo changé -> $fridgeId');
         _selectedFridgeId = fridgeId;
         _loadInventory();
       }
@@ -99,7 +99,7 @@ class _InventoryPageState extends State<InventoryPage>
 
       if (kDebugMode) {
         print(
-          '📦 InventoryPage: Loading inventory for fridge $_selectedFridgeId',
+          'Loading inventory for fridge $_selectedFridgeId',
         );
       }
 

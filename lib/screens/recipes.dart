@@ -43,7 +43,7 @@ class _RecipesPageState extends State<RecipesPage>
     _fridgeSubscription = _fridgeService.fridgeStream.listen((fridgeId) {
       if (fridgeId != null && fridgeId != _selectedFridgeId) {
         if (kDebugMode) {
-          print('🍳 RecipesPage: Frigo changé via stream -> $fridgeId');
+          print('Frigo changé via stream -> $fridgeId');
         }
         _selectedFridgeId = fridgeId;
         _loadRecipes(forceRefresh: true); // ✅ Force le rechargement
@@ -105,10 +105,6 @@ class _RecipesPageState extends State<RecipesPage>
 
       if (_selectedFridgeId != null) {
         final results = await Future.wait([
-          _api.getRecipes(
-            sortBy: _currentSort == 'match' ? 'date' : _currentSort,
-            sortOrder: _sortOrder,
-          ),
           _api.getFeasibleRecipes(
             _selectedFridgeId!,
             sortBy: _currentSort,
@@ -126,10 +122,6 @@ class _RecipesPageState extends State<RecipesPage>
         }
       } else {
         final results = await Future.wait([
-          _api.getRecipes(
-            sortBy: _currentSort == 'match' ? 'date' : _currentSort,
-            sortOrder: _sortOrder,
-          ),
           _api.getFavoriteRecipes(),
         ]);
 
@@ -2201,13 +2193,13 @@ class _RecipesPageState extends State<RecipesPage>
           final item = _feasibleRecipes[index];
 
           if (kDebugMode && index == 0) {
-            print('🔍 Structure item: ${item.keys.toList()}');
-            print('🔍 recipe type: ${item['recipe'].runtimeType}');
-            print('🔍 can_make: ${item['can_make']}');
-            print('🔍 match_percentage: ${item['match_percentage']}');
-            print('🔍 shopping_list_status: ${item['shopping_list_status']}');
-            print('🔍 ingredients_complete: ${item['ingredients_complete']}');
-            print('🔍 combined_percentage: ${item['combined_percentage']}');
+            print('Structure item: ${item.keys.toList()}');
+            print('recipe type: ${item['recipe'].runtimeType}');
+            print('can_make: ${item['can_make']}');
+            print('match_percentage: ${item['match_percentage']}');
+            print('shopping_list_status: ${item['shopping_list_status']}');
+            print('ingredients_complete: ${item['ingredients_complete']}');
+            print('combined_percentage: ${item['combined_percentage']}');
           }
 
           final recipe = item['recipe'] as Map<String, dynamic>;

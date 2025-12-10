@@ -76,7 +76,7 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
     await _tts.setPitch(1.0);
   }
 
-  // ✅ NOUVEAU : Charger l'historique depuis le backend
+  //  NOUVEAU : Charger l'historique depuis le backend
   Future<void> _loadSearchHistory() async {
     if (_selectedFridgeId == null) return;
 
@@ -100,7 +100,7 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
     }
   }
 
-  // ✅ NOUVEAU : Recherche avec API backend
+  //  NOUVEAU : Recherche avec API backend
   Future<void> _performAISearch(String query) async {
     if (query.trim().isEmpty) return;
     if (_selectedFridgeId == null) {
@@ -142,7 +142,7 @@ class _SearchInventoryPageState extends State<SearchInventoryPage>
     }
   }
 
-  // ✅ NOUVEAU : Supprimer l'historique
+  //  NOUVEAU : Supprimer l'historique
   Future<void> _clearSearchHistory() async {
     if (_selectedFridgeId == null) return;
 

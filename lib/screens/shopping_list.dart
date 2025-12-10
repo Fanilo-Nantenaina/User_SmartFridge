@@ -2280,13 +2280,13 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     Set<int> selectedRecipeIds = {};
 
     try {
-      recipes = await _api.getRecipes();
+      recipes = await _api.getFeasibleRecipes(_selectedFridgeId!);
       final totalRecipes = recipes.length;
 
       if (kDebugMode) {
-        print('🔍 DEBUG: Total recettes récupérées: $totalRecipes');
+        print('Total recettes récupérées: $totalRecipes');
         print(
-          '🔍 DEBUG: IDs des recettes: ${recipes.map((r) => r['id']).toList()}',
+          'IDs des recettes: ${recipes.map((r) => r['id']).toList()}',
         );
       }
 
@@ -2295,8 +2295,8 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
       );
 
       if (kDebugMode) {
-        print('🔍 DEBUG: Total listes de courses: ${shoppingLists.length}');
-        print('🔍 DEBUG: Contenu des listes:');
+        print('Total listes de courses: ${shoppingLists.length}');
+        print('Contenu des listes:');
         for (var list in shoppingLists) {
           print(
             '   - Liste ID: ${list['id']}, '
@@ -2319,7 +2319,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
 
       if (kDebugMode) {
         print(
-          '🔍 DEBUG: Recipe IDs avec liste active: $recipesWithActiveLists',
+          'Recipe IDs avec liste active: $recipesWithActiveLists',
         );
       }
 
@@ -2329,7 +2329,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
 
         if (kDebugMode) {
           print(
-            '🔍 DEBUG: Recette ${recipe['title']} (ID: $recipeId) '
+            'Recette ${recipe['title']} (ID: $recipeId) '
             '- A liste active: $hasActiveListe',
           );
         }
@@ -2338,9 +2338,9 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
       }).toList();
 
       if (kDebugMode) {
-        print('🔍 DEBUG: Recettes après filtrage: ${recipes.length}');
+        print('Recettes après filtrage: ${recipes.length}');
         print(
-          '🔍 DEBUG: IDs des recettes filtrées: ${recipes.map((r) => r['id']).toList()}',
+          'IDs des recettes filtrées: ${recipes.map((r) => r['id']).toList()}',
         );
       }
 
