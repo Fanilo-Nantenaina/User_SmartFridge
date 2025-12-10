@@ -123,12 +123,17 @@ class _FridgeSelectorState extends State<FridgeSelector> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ PROTECTION : Vérifier que la liste n'est pas vide
     if (widget.fridges.isEmpty) return const SizedBox.shrink();
 
+    // ✅ PROTECTION : Vérifier que l'ID sélectionné existe
     final selectedFridge = widget.fridges.firstWhere(
       (f) => f['id'] == widget.selectedFridgeId,
-      orElse: () => widget.fridges.first,
+      orElse: () => widget.fridges.isNotEmpty ? widget.fridges.first : null,
     );
+
+    // ✅ PROTECTION : Si aucun frigo valide, ne rien afficher
+    if (selectedFridge == null) return const SizedBox.shrink();
 
     return InkWell(
       onTap: widget.fridges.length > 1 ? _showFridgePickerDialog : null,

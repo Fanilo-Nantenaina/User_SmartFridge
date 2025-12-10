@@ -6,6 +6,8 @@ import 'package:user_smartfridge/screens/shopping_list.dart';
 import 'package:user_smartfridge/service/api.dart';
 import 'package:user_smartfridge/service/fridge.dart';
 
+import '../main.dart';
+
 class RecipesPage extends StatefulWidget {
   const RecipesPage({super.key});
 
@@ -39,14 +41,14 @@ class _RecipesPageState extends State<RecipesPage>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
 
-    // ✅ CORRECTION : Écoute du stream de changement de frigo
+    // CORRECTION : Écoute du stream de changement de frigo
     _fridgeSubscription = _fridgeService.fridgeStream.listen((fridgeId) {
       if (fridgeId != null && fridgeId != _selectedFridgeId) {
         if (kDebugMode) {
           print('Frigo changé via stream -> $fridgeId');
         }
         _selectedFridgeId = fridgeId;
-        _loadRecipes(forceRefresh: true); // ✅ Force le rechargement
+        _loadRecipes(forceRefresh: true); // Force le rechargement
       }
     });
 
@@ -67,9 +69,7 @@ class _RecipesPageState extends State<RecipesPage>
     try {
       final fridges = await _api.getFridges();
 
-      // ✅ Si forceRefresh = true, on utilise directement _selectedFridgeId
       if (!forceRefresh) {
-        // Comportement normal au premier chargement
         int? savedFridgeId = await _fridgeService.getSelectedFridge();
 
         if (savedFridgeId != null &&
@@ -80,23 +80,11 @@ class _RecipesPageState extends State<RecipesPage>
           await _fridgeService.setSelectedFridge(_selectedFridgeId!);
         }
       } else {
-        // ✅ MODE FORCE : On garde _selectedFridgeId tel quel
-        if (kDebugMode) {
-          print('🔄 Force refresh pour frigo $_selectedFridgeId');
-        }
-
-        // ✅ Vérifier que le frigo existe toujours
+        // ✅ PROTECTION : Vérifier que le frigo existe toujours
         if (_selectedFridgeId != null &&
             !fridges.any((f) => f['id'] == _selectedFridgeId)) {
-          if (kDebugMode) {
-            print('⚠️ Frigo $_selectedFridgeId n\'existe plus');
-          }
           _selectedFridgeId = fridges.isNotEmpty ? fridges[0]['id'] : null;
         }
-      }
-
-      if (kDebugMode) {
-        print('📊 Chargement des recettes pour frigo $_selectedFridgeId');
       }
 
       List<dynamic> allRecipes = [];
@@ -105,6 +93,7 @@ class _RecipesPageState extends State<RecipesPage>
 
       if (_selectedFridgeId != null) {
         final results = await Future.wait([
+          _api.getRecipes(sortBy: _currentSort, sortOrder: _sortOrder),
           _api.getFeasibleRecipes(
             _selectedFridgeId!,
             sortBy: _currentSort,
@@ -116,18 +105,9 @@ class _RecipesPageState extends State<RecipesPage>
         allRecipes = results[0];
         feasibleRecipes = results[1];
         favoriteRecipes = results[2];
-
-        if (kDebugMode) {
-          print('✅ Recettes chargées : ${feasibleRecipes.length} réalisables');
-        }
       } else {
-        final results = await Future.wait([
-          _api.getFavoriteRecipes(),
-        ]);
-
-        allRecipes = results[0];
-        favoriteRecipes = results[1];
-        feasibleRecipes = [];
+        // ✅ Si pas de frigo, charger quand même les favoris
+        favoriteRecipes = await _api.getFavoriteRecipes();
       }
 
       final favoriteIds = favoriteRecipes.map((r) => r['id'] as int).toSet();
@@ -215,7 +195,7 @@ class _RecipesPageState extends State<RecipesPage>
                     _sortOrder = value ? 'desc' : 'asc';
                   });
                   Navigator.pop(context);
-                  _loadRecipes(forceRefresh: true); // ✅ Force refresh
+                  _loadRecipes(forceRefresh: true); // Force refresh
                 },
               ),
             ),
@@ -240,7 +220,7 @@ class _RecipesPageState extends State<RecipesPage>
       onTap: () {
         setState(() => _currentSort = value);
         Navigator.pop(context);
-        _loadRecipes(forceRefresh: true); // ✅ Force refresh
+        _loadRecipes(forceRefresh: true); // Force refresh
       },
     );
   }
@@ -338,7 +318,7 @@ class _RecipesPageState extends State<RecipesPage>
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.pop(context);
-                _loadRecipes(forceRefresh: true); // ✅ Force refresh
+                _loadRecipes(forceRefresh: true); // Force refresh
                 _tabController.animateTo(1);
               },
               icon: const Icon(Icons.visibility),
@@ -373,7 +353,7 @@ class _RecipesPageState extends State<RecipesPage>
       final suggestion = await _api.suggestRecipe(_selectedFridgeId!);
 
       if (kDebugMode) {
-        print('✅ Received suggestion: ${suggestion['title']}');
+        print('Received suggestion: ${suggestion['title']}');
       }
 
       setState(() {
@@ -385,7 +365,7 @@ class _RecipesPageState extends State<RecipesPage>
     } catch (e) {
       setState(() => _isDiscovering = false);
       if (kDebugMode) {
-        print('❌ Error suggesting recipe: $e');
+        print('Error suggesting recipe: $e');
       }
       _showError('Erreur lors de la suggestion: $e');
     }
@@ -460,7 +440,7 @@ class _RecipesPageState extends State<RecipesPage>
       final recipeId = savedRecipe['id'] as int;
 
       if (kDebugMode) {
-        print('✅ Recette sauvegardée avec ID: $recipeId');
+        print('Recette sauvegardée avec ID: $recipeId');
       }
 
       final missingIngredients =
@@ -486,11 +466,15 @@ class _RecipesPageState extends State<RecipesPage>
 
       _showSuccess('Liste créée avec $itemsCount article(s) !');
 
-      _loadRecipes(forceRefresh: true); // ✅ Force refresh
+      _loadRecipes(forceRefresh: true);
     } catch (e) {
       if (!mounted) return;
       Navigator.pop(context);
       _showError('Erreur: $e');
+    }
+
+    if (mounted) {
+      homePageKey.currentState?.changeTab(3);
     }
   }
 
@@ -574,12 +558,7 @@ class _RecipesPageState extends State<RecipesPage>
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ShoppingListsPage(),
-                  ),
-                );
+                homePageKey.currentState?.changeTab(3);
               },
               style: ElevatedButton.styleFrom(elevation: 0),
               child: const Text('Voir la liste'),
@@ -673,7 +652,7 @@ class _RecipesPageState extends State<RecipesPage>
               ],
             ),
           ),
-          // ✅ AJOUT : Bouton de tri
+          // AJOUT : Bouton de tri
           IconButton(
             icon: const Icon(Icons.sort),
             onPressed: _showSortOptions,
@@ -703,10 +682,7 @@ class _RecipesPageState extends State<RecipesPage>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: canDiscover
-                  ? [
-                      Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.secondary,
-                    ]
+                  ? [Colors.blue, Colors.blue]
                   : [Colors.grey.shade400, Colors.grey.shade500],
             ),
             borderRadius: BorderRadius.circular(16),
@@ -742,7 +718,7 @@ class _RecipesPageState extends State<RecipesPage>
                         ),
                       )
                     : const Icon(
-                        Icons.auto_awesome,
+                        Icons.lightbulb_outline,
                         color: Colors.white,
                         size: 24,
                       ),
@@ -1103,7 +1079,7 @@ class _RecipesPageState extends State<RecipesPage>
                 child: SafeArea(
                   child: Row(
                     children: [
-                      // ✅ Bouton "Sauvegarder" seulement
+                      // Bouton "Sauvegarder" seulement
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () {
@@ -1121,7 +1097,7 @@ class _RecipesPageState extends State<RecipesPage>
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // ✅ Bouton "Autre idée"
+                      // Bouton "Autre idée"
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () {
@@ -1139,7 +1115,7 @@ class _RecipesPageState extends State<RecipesPage>
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // ✅ Bouton principal : Liste de courses OU Je cuisine
+                      // Bouton principal : Liste de courses OU Je cuisine
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () async {
@@ -1157,13 +1133,7 @@ class _RecipesPageState extends State<RecipesPage>
                               );
 
                               if (mounted) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const ShoppingListsPage(),
-                                  ),
-                                );
+                                homePageKey.currentState?.changeTab(3);
                               }
                             } else {
                               await _saveSuggestedRecipe(suggestion);

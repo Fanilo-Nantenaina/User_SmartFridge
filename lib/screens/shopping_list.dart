@@ -129,8 +129,11 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
 
   Future<void> _loadShoppingLists() async {
     setState(() => _isLoading = true);
+
     try {
-      final fridges = await _api.getFridges();
+      final api = ClientApiService();
+      final fridges = await api.getFridges();
+
       if (fridges.isEmpty) {
         setState(() {
           _allLists = [];
@@ -140,11 +143,24 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
         return;
       }
 
-      final lists = await _api.getShoppingLists(
+      // ✅ PROTECTION : Vérifier que le frigo sélectionné existe
+      if (_selectedFridgeId == null) {
+        final fridgeService = FridgeService();
+        _selectedFridgeId = await fridgeService.getSelectedFridge();
+
+        // Si le frigo sauvegardé n'existe pas, prendre le premier
+        if (_selectedFridgeId == null ||
+            !fridges.any((f) => f['id'] == _selectedFridgeId)) {
+          _selectedFridgeId = fridges[0]['id'];
+        }
+      }
+
+      final lists = await api.getShoppingLists(
         fridgeId: _selectedFridgeId,
         sortBy: _currentSort,
         sortOrder: _sortOrder,
       );
+
       setState(() {
         _allLists = lists;
         _filterLists();
@@ -744,8 +760,8 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
-                              Theme.of(context).colorScheme.primary,
-                              Theme.of(context).colorScheme.secondary,
+                              Colors.blue.shade700,
+                              Colors.blue.shade900,
                             ],
                           ),
                           borderRadius: BorderRadius.circular(12),
@@ -1275,7 +1291,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF8B5CF6),
+                            color: Colors.blue.shade700,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
@@ -1318,17 +1334,15 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                          color: Colors.blue.shade700,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(0xFF8B5CF6).withOpacity(0.3),
-                          ),
+                          border: Border.all(color: Colors.blue.shade900),
                         ),
                         child: Row(
                           children: [
                             const Icon(
                               Icons.lightbulb_outline,
-                              color: Color(0xFF8B5CF6),
+                              color: Colors.blue,
                               size: 20,
                             ),
                             const SizedBox(width: 12),
@@ -1337,7 +1351,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                                 diversityNote,
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: Colors.purple.shade700,
+                                  color: Colors.blue.shade900,
                                 ),
                               ),
                             ),
@@ -1371,9 +1385,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                           context,
                         ).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFF8B5CF6).withOpacity(0.2),
-                        ),
+                        border: Border.all(color: Colors.blue.shade700),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1383,14 +1395,12 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: const Color(
-                                    0xFF8B5CF6,
-                                  ).withOpacity(0.1),
+                                  color: Colors.blue.shade700,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Icon(
                                   _getCategoryIcon(category),
-                                  color: const Color(0xFF8B5CF6),
+                                  color: Colors.blue.shade700,
                                   size: 20,
                                 ),
                               ),
@@ -1427,9 +1437,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(
-                                    0xFF8B5CF6,
-                                  ).withOpacity(0.1),
+                                  color: Colors.blue.shade700,
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
@@ -1437,7 +1445,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                                   style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: Color(0xFF8B5CF6),
+                                    color: Colors.blue,
                                   ),
                                 ),
                               ),
@@ -1508,7 +1516,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                           icon: const Icon(Icons.save),
                           label: const Text('Enregistrer'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF8B5CF6),
+                            backgroundColor: Colors.blue.shade400,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             elevation: 0,
@@ -2285,9 +2293,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
 
       if (kDebugMode) {
         print('Total recettes récupérées: $totalRecipes');
-        print(
-          'IDs des recettes: ${recipes.map((r) => r['id']).toList()}',
-        );
+        print('IDs des recettes: ${recipes.map((r) => r['id']).toList()}');
       }
 
       final shoppingLists = await _api.getShoppingLists(
@@ -2318,9 +2324,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
           .toSet();
 
       if (kDebugMode) {
-        print(
-          'Recipe IDs avec liste active: $recipesWithActiveLists',
-        );
+        print('Recipe IDs avec liste active: $recipesWithActiveLists');
       }
 
       recipes = recipes.where((recipe) {

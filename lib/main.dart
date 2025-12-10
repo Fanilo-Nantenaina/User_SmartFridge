@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +17,10 @@ import 'package:user_smartfridge/service/api.dart';
 import 'package:user_smartfridge/service/fridge.dart';
 import 'package:user_smartfridge/service/notification.dart';
 import 'package:user_smartfridge/service/theme.dart';
+
+// NOUVEAU : GlobalKey pour accéder au state de HomePage depuis n'importe où
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<_HomePageState> homePageKey = GlobalKey<_HomePageState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +47,7 @@ class SmartFridgeClientApp extends StatelessWidget {
         return MaterialApp(
           title: 'Smart Fridge',
           debugShowCheckedModeBanner: false,
+          navigatorKey: navigatorKey,
           theme: ThemeSwitcher.lightTheme,
           darkTheme: ThemeSwitcher.darkTheme,
           themeMode: ThemeSwitcher().themeMode,
@@ -82,7 +89,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
     if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    return _isAuthenticated ? const HomePage() : const LoginPage();
+    return _isAuthenticated ? HomePage(key: homePageKey) : const LoginPage();
   }
 }
 
@@ -101,6 +108,7 @@ class _HomePageState extends State<HomePage> {
   int _pendingAlertsCount = 0;
   int _expiringItemsCount = 0;
   int? _selectedFridgeId;
+  bool _isInitializing = true;
 
   final List<Widget> _pages = const [
     DashboardPage(),
@@ -119,12 +127,29 @@ class _HomePageState extends State<HomePage> {
     _listenToFridgeChanges();
   }
 
+  // NOUVEAU : Méthode publique pour changer d'onglet depuis l'extérieur
+  void changeTab(int index) {
+    if (index >= 0 && index < _pages.length) {
+      setState(() => _currentIndex = index);
+      _loadBadgeForTab(index);
+    }
+  }
+
   Future<void> _initializeFridgeAndBadges() async {
+    if (mounted) {
+      setState(() => _isInitializing = true);
+    }
+
     try {
       final api = ClientApiService();
       final fridges = await api.getFridges();
 
-      if (fridges.isEmpty) return;
+      if (fridges.isEmpty) {
+        if (mounted) {
+          setState(() => _isInitializing = false);
+        }
+        return;
+      }
 
       final fridgeService = FridgeService();
       int? savedFridgeId = await fridgeService.getSelectedFridge();
@@ -135,19 +160,43 @@ class _HomePageState extends State<HomePage> {
       } else {
         _selectedFridgeId = fridges[0]['id'];
         await fridgeService.setSelectedFridge(_selectedFridgeId!);
+        await Future.delayed(const Duration(milliseconds: 150));
       }
 
       await _loadAllBadges();
+
+      if (mounted) {
+        setState(() => _isInitializing = false);
+      }
     } catch (e) {
-      print('❌ Erreur initialisation: $e');
+      print('Erreur initialisation: $e');
+      if (mounted) {
+        setState(() => _isInitializing = false);
+      }
     }
   }
+
+  Timer? _fridgeChangeTimer;
 
   void _listenToFridgeChanges() {
     FridgeService().fridgeStream.listen((fridgeId) {
       if (fridgeId != null && fridgeId != _selectedFridgeId) {
-        _selectedFridgeId = fridgeId;
-        _loadAllBadges();
+        _fridgeChangeTimer?.cancel();
+
+        _fridgeChangeTimer = Timer(const Duration(milliseconds: 300), () async {
+          if (mounted) {
+            setState(() {
+              _selectedFridgeId = fridgeId;
+              _isInitializing = true;
+            });
+
+            await _loadAllBadges();
+
+            if (mounted) {
+              setState(() => _isInitializing = false);
+            }
+          }
+        });
       }
     });
   }
@@ -158,6 +207,21 @@ class _HomePageState extends State<HomePage> {
       _loadPendingAlertsCount(),
       _loadExpiringItemsCount(),
     ]);
+  }
+
+  // NOUVEAU : Charger uniquement le badge nécessaire
+  void _loadBadgeForTab(int index) {
+    switch (index) {
+      case 1:
+        _loadExpiringItemsCount();
+        break;
+      case 3:
+        _loadPendingShoppingListsCount();
+        break;
+      case 4:
+        _loadPendingAlertsCount();
+        break;
+    }
   }
 
   Future<void> _loadPendingShoppingListsCount() async {
@@ -179,7 +243,7 @@ class _HomePageState extends State<HomePage> {
         setState(() => _pendingShoppingListsCount = count);
       }
     } catch (e) {
-      print('❌ Erreur chargement shopping lists: $e');
+      print('Erreur chargement shopping lists: $e');
     }
   }
 
@@ -194,7 +258,7 @@ class _HomePageState extends State<HomePage> {
         setState(() => _pendingAlertsCount = alerts.length);
       }
     } catch (e) {
-      print('❌ Erreur chargement alertes: $e');
+      print('Erreur chargement alertes: $e');
     }
   }
 
@@ -216,11 +280,10 @@ class _HomePageState extends State<HomePage> {
         setState(() => _expiringItemsCount = criticalCount);
       }
     } catch (e) {
-      print('❌ Erreur chargement inventaire: $e');
+      print('Erreur chargement inventaire: $e');
     }
   }
 
-  // ✅ NOUVEAU : Navigation vers la recherche vocale
   void _navigateToSearch() {
     Navigator.push(
       context,
@@ -231,36 +294,60 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _pages),
-      // ✅ NOUVEAU : Floating Action Button pour le micro
+      body: Stack(
+        children: [
+          // Page normale
+          IndexedStack(index: _currentIndex, children: _pages),
+
+          // Overlay de chargement pendant l'initialisation
+          if (_isInitializing)
+            Container(
+              color: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.8),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Chargement...',
+                      style: TextStyle(
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
       floatingActionButton: _buildFloatingMicButton(),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      // ✅ NOUVEAU : BottomAppBar avec encoche
       bottomNavigationBar: _buildBottomAppBar(),
     );
   }
 
-  // ✅ NOUVEAU : Bouton micro flottant
+  // CORRECTION : Bouton micro avec outline bleu au lieu de remplissage
   Widget _buildFloatingMicButton() {
     return Container(
-      width: 70,
-      height: 70,
+      width: 60, // Réduit de 70 à 60
+      height: 60,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.primary.withOpacity(0.8),
-          ],
+        color: Theme.of(context).scaffoldBackgroundColor, // Fond de l'app
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary,
+          width: 3, // Outline bleu
         ),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.4),
-            blurRadius: 20,
-            spreadRadius: 2,
-            offset: const Offset(0, 4),
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+            blurRadius: 12,
+            spreadRadius: 1,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -269,13 +356,16 @@ class _HomePageState extends State<HomePage> {
         child: InkWell(
           onTap: _navigateToSearch,
           customBorder: const CircleBorder(),
-          child: const Icon(Icons.mic, color: Colors.white, size: 32),
+          child: Icon(
+            Icons.mic,
+            color: Theme.of(context).colorScheme.primary,
+            size: 28, // Réduit de 32 à 28
+          ),
         ),
       ),
     );
   }
 
-  // ✅ NOUVEAU : BottomAppBar personnalisé
   Widget _buildBottomAppBar() {
     return BottomAppBar(
       height: 70,
@@ -286,7 +376,6 @@ class _HomePageState extends State<HomePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          // Première moitié (3 icônes)
           _buildNavItem(
             Icons.dashboard_outlined,
             Icons.dashboard,
@@ -306,11 +395,7 @@ class _HomePageState extends State<HomePage> {
             'Recettes',
             2,
           ),
-
-          // Espace pour le FAB
-          const SizedBox(width: 70),
-
-          // Deuxième moitié (3 icônes)
+          const SizedBox(width: 60), // Ajusté pour le nouveau bouton
           _buildNavItem(
             Icons.shopping_cart_outlined,
             Icons.shopping_cart,
@@ -344,11 +429,7 @@ class _HomePageState extends State<HomePage> {
       child: InkWell(
         onTap: () {
           setState(() => _currentIndex = index);
-
-          // Recharger les badges quand on change d'onglet
-          if (index == 1) _loadExpiringItemsCount();
-          if (index == 3) _loadPendingShoppingListsCount();
-          if (index == 4) _loadPendingAlertsCount();
+          _loadBadgeForTab(index);
         },
         child: Container(
           height: double.infinity,

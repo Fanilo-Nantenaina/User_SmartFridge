@@ -8,6 +8,8 @@ import 'package:user_smartfridge/service/realtime.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 
+import '../main.dart';
+
 class InventoryPage extends StatefulWidget {
   const InventoryPage({super.key});
 
@@ -98,9 +100,7 @@ class _InventoryPageState extends State<InventoryPage>
       }
 
       if (kDebugMode) {
-        print(
-          'Loading inventory for fridge $_selectedFridgeId',
-        );
+        print('Loading inventory for fridge $_selectedFridgeId');
       }
 
       final inventory = await _api.getInventory(_selectedFridgeId!);
@@ -303,12 +303,7 @@ class _InventoryPageState extends State<InventoryPage>
           ),
           IconButton(
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ShoppingListsPage(),
-                ),
-              );
+              homePageKey.currentState?.changeTab(3);
             },
             icon: const Icon(Icons.shopping_cart_outlined),
             tooltip: 'Créer une liste',

@@ -6,6 +6,7 @@ import 'package:user_smartfridge/screens/search_inventory.dart';
 import 'package:user_smartfridge/service/api.dart';
 import 'package:user_smartfridge/service/fridge.dart';
 import 'package:user_smartfridge/widgets/fridge_selector.dart';
+import 'package:user_smartfridge/widgets/otp_input.dart';
 import '../main.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -479,12 +480,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   Icons.restaurant_menu_outlined,
                   const Color(0xFF8B5CF6),
                   () {
-                    // ✅ CORRIGÉ : Changer l'onglet au lieu de naviguer
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (context) => const HomePage(initialIndex: 2),
-                      ),
-                    );
+                    homePageKey.currentState?.changeTab(2);
                   },
                 ),
               ),
@@ -500,12 +496,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   Icons.shopping_cart_outlined,
                   const Color(0xFF10B981),
                   () {
-                    // ✅ CORRIGÉ : Changer l'onglet au lieu de naviguer
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (context) => const HomePage(initialIndex: 3),
-                      ),
-                    );
+                    homePageKey.currentState?.changeTab(3);
                   },
                 ),
               ),
@@ -517,12 +508,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   Icons.notifications_outlined,
                   const Color(0xFFF59E0B),
                   () {
-                    // ✅ CORRIGÉ : Changer l'onglet au lieu de naviguer
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (context) => const HomePage(initialIndex: 4),
-                      ),
-                    );
+                    homePageKey.currentState?.changeTab(4);
                   },
                 ),
               ),
@@ -586,71 +572,189 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  // Méthode complète à remplacer dans dashboard.dart
+  // N'oubliez pas d'importer : import 'package:user_smartfridge/widgets/otp_input.dart';
+
   Future<void> _showPairingDialog() async {
-    final codeController = TextEditingController();
     final nameController = TextEditingController(text: 'Mon Frigo');
     final locationController = TextEditingController();
     bool isProcessing = false;
+    String otpCode = '';
 
-    await showDialog(
+    await showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: !isProcessing,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+        builder: (context, setState) => Container(
+          height: MediaQuery.of(context).size.height * 0.75,
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          title: Row(
+          child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.link,
-                  color: Theme.of(context).colorScheme.primary,
+              // ==================== HEADER ====================
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    // Handle bar
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outline.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Header content
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Theme.of(context).colorScheme.primary,
+                                Theme.of(
+                                  context,
+                                ).colorScheme.primary.withOpacity(0.8),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.link,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Connecter un frigo',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyLarge?.color,
+                                ),
+                              ),
+                              Text(
+                                'Entrez le code du kiosk',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyMedium?.color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (!isProcessing)
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'Connecter un frigo',
-                  style: TextStyle(fontSize: 20),
-                ),
-              ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
+              const Divider(height: 1),
+
+              // ==================== CONTENT ====================
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.only(
+                    left: 20,
+                    right: 20,
+                    top: 20,
+                    bottom: MediaQuery.of(context).viewInsets.bottom + 20,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Info box
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.primary.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Theme.of(context).colorScheme.primary,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Comment ça marche ?',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '1. Regardez le code à 6 chiffres sur le kiosk\n'
+                                    '2. Entrez-le ci-dessous\n'
+                                    '3. Personnalisez votre frigo',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium?.color,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      // OTP Section
                       Row(
                         children: [
                           Icon(
-                            Icons.info_outline,
-                            size: 16,
-                            color: Theme.of(
-                              context,
-                            ).textTheme.bodyMedium?.color,
+                            Icons.pin,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Comment ça marche ?',
+                            'Code à 6 chiffres *',
                             style: TextStyle(
+                              fontSize: 16,
                               fontWeight: FontWeight.w600,
                               color: Theme.of(
                                 context,
@@ -659,206 +763,338 @@ class _DashboardPageState extends State<DashboardPage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '1. Regardez le code à 6 chiffres sur le kiosk\n'
-                        '2. Entrez-le ci-dessous\n'
-                        '3. Personnalisez le nom de votre frigo',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Theme.of(context).textTheme.bodyMedium?.color,
-                          height: 1.4,
+                      const SizedBox(height: 16),
+
+                      // Widget OTP
+                      OtpInput(
+                        enabled: !isProcessing,
+                        onCompleted: (code) {
+                          setState(() => otpCode = code);
+                        },
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // Name field
+                      TextField(
+                        controller: nameController,
+                        enabled: !isProcessing,
+                        decoration: InputDecoration(
+                          labelText: 'Nom du frigo *',
+                          hintText: 'Ex: Frigo Cuisine',
+                          prefixIcon: const Icon(Icons.kitchen_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Location field
+                      TextField(
+                        controller: locationController,
+                        enabled: !isProcessing,
+                        decoration: InputDecoration(
+                          labelText: 'Localisation (optionnel)',
+                          hintText: 'Ex: Cuisine, Bureau',
+                          prefixIcon: const Icon(Icons.location_on_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: codeController,
-                  decoration: InputDecoration(
-                    labelText: 'Code à 6 chiffres *',
-                    hintText: '123456',
-                    prefixIcon: const Icon(Icons.pin),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+              ),
+
+              // ==================== FOOTER ====================
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -5),
                     ),
-                  ),
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  enabled: !isProcessing,
+                  ],
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Nom du frigo *',
-                    hintText: 'Ex: Frigo Cuisine',
-                    prefixIcon: const Icon(Icons.kitchen_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  enabled: !isProcessing,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: locationController,
-                  decoration: InputDecoration(
-                    labelText: 'Localisation (optionnel)',
-                    hintText: 'Ex: Cuisine, Bureau',
-                    prefixIcon: const Icon(Icons.location_on_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  enabled: !isProcessing,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: isProcessing ? null : () => Navigator.pop(context),
-              child: const Text('Annuler'),
-            ),
-            ElevatedButton.icon(
-              onPressed: isProcessing
-                  ? null
-                  : () async {
-                      if (codeController.text.length != 6) {
-                        _showError('Le code doit contenir 6 chiffres');
-                        return;
-                      }
-                      if (nameController.text.isEmpty) {
-                        _showError('Donnez un nom à votre frigo');
-                        return;
-                      }
-
-                      setState(() => isProcessing = true);
-
-                      try {
-                        final result = await _api.pairFridge(
-                          pairingCode: codeController.text,
-                          fridgeName: nameController.text,
-                          fridgeLocation: locationController.text.isEmpty
-                              ? null
-                              : locationController.text,
-                        );
-
-                        Navigator.pop(context);
-
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            title: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF10B981,
-                                    ).withOpacity(0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.check_circle,
-                                    color: Color(0xFF10B981),
-                                    size: 32,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Text('Frigo connecté !'),
-                              ],
-                            ),
-                            content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Votre frigo "${result['fridge_name']}" est maintenant connecté.',
-                                  style: const TextStyle(fontSize: 15),
-                                ),
-                                const SizedBox(height: 16),
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerHighest,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      _buildInfoRow(
-                                        Icons.kitchen,
-                                        'Nom',
-                                        result['fridge_name'],
-                                      ),
-                                      if (result['fridge_location'] !=
-                                          null) ...[
-                                        const SizedBox(height: 8),
-                                        _buildInfoRow(
-                                          Icons.location_on,
-                                          'Lieu',
-                                          result['fridge_location'],
-                                        ),
-                                      ],
-                                      const SizedBox(height: 8),
-                                      _buildInfoRow(
-                                        Icons.tag,
-                                        'ID',
-                                        '#${result['fridge_id']}',
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            actions: [
-                              ElevatedButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  _loadData();
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  minimumSize: const Size(double.infinity, 48),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: const Text('Commencer'),
+                child: SafeArea(
+                  child: Row(
+                    children: [
+                      // Cancel button
+                      if (!isProcessing)
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                            ],
+                            ),
+                            child: const Text('Annuler'),
                           ),
-                        );
-                      } catch (e) {
-                        setState(() => isProcessing = false);
-                        _showError(e.toString().replaceAll('Exception: ', ''));
-                      }
-                    },
-              icon: isProcessing
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      if (!isProcessing) const SizedBox(width: 12),
+
+                      // Connect button
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton.icon(
+                          onPressed: isProcessing
+                              ? null
+                              : () async {
+                                  // Validation
+                                  if (otpCode.length != 6) {
+                                    _showError(
+                                      'Le code doit contenir 6 chiffres',
+                                    );
+                                    return;
+                                  }
+                                  if (nameController.text.isEmpty) {
+                                    _showError('Donnez un nom à votre frigo');
+                                    return;
+                                  }
+
+                                  setState(() => isProcessing = true);
+
+                                  try {
+                                    // API call
+                                    final result = await _api.pairFridge(
+                                      pairingCode: otpCode,
+                                      fridgeName: nameController.text,
+                                      fridgeLocation:
+                                          locationController.text.isEmpty
+                                          ? null
+                                          : locationController.text,
+                                    );
+
+                                    Navigator.pop(context);
+
+                                    // Success dialog
+                                    showModalBottomSheet(
+                                      context: context,
+                                      backgroundColor: Colors.transparent,
+                                      isDismissible: false,
+                                      builder: (context) => Container(
+                                        height:
+                                            MediaQuery.of(context).size.height *
+                                            0.5,
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).cardColor,
+                                          borderRadius:
+                                              const BorderRadius.vertical(
+                                                top: Radius.circular(24),
+                                              ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Padding(
+                                              padding: const EdgeInsets.all(20),
+                                              child: Column(
+                                                children: [
+                                                  // Handle bar
+                                                  Container(
+                                                    width: 40,
+                                                    height: 4,
+                                                    decoration: BoxDecoration(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .outline
+                                                          .withOpacity(0.5),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            2,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 20),
+
+                                                  // Success icon
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                          20,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                        0xFF10B981,
+                                                      ).withOpacity(0.1),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.check_circle,
+                                                      color: Color(0xFF10B981),
+                                                      size: 64,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 20),
+
+                                                  // Success title
+                                                  Text(
+                                                    'Frigo connecté !',
+                                                    style: TextStyle(
+                                                      fontSize: 24,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Theme.of(context)
+                                                          .textTheme
+                                                          .bodyLarge
+                                                          ?.color,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+
+                                                  // Success message
+                                                  Text(
+                                                    'Votre frigo "${result['fridge_name']}" est maintenant connecté.',
+                                                    textAlign: TextAlign.center,
+                                                    style: TextStyle(
+                                                      fontSize: 15,
+                                                      color: Theme.of(context)
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.color,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 20),
+
+                                                  // Info box
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                          16,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .surfaceContainerHighest,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
+                                                    child: Column(
+                                                      children: [
+                                                        _buildInfoRow(
+                                                          Icons.kitchen,
+                                                          'Nom',
+                                                          result['fridge_name'],
+                                                        ),
+                                                        if (result['fridge_location'] !=
+                                                            null) ...[
+                                                          const SizedBox(
+                                                            height: 8,
+                                                          ),
+                                                          _buildInfoRow(
+                                                            Icons.location_on,
+                                                            'Lieu',
+                                                            result['fridge_location'],
+                                                          ),
+                                                        ],
+                                                        const SizedBox(
+                                                          height: 8,
+                                                        ),
+                                                        _buildInfoRow(
+                                                          Icons.tag,
+                                                          'ID',
+                                                          '#${result['fridge_id']}',
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const Spacer(),
+
+                                            // Start button
+                                            Container(
+                                              padding: const EdgeInsets.all(20),
+                                              child: SafeArea(
+                                                child: SizedBox(
+                                                  width: double.infinity,
+                                                  child: ElevatedButton.icon(
+                                                    onPressed: () {
+                                                      Navigator.pop(context);
+                                                      _loadData();
+                                                    },
+                                                    icon: const Icon(
+                                                      Icons.check,
+                                                    ),
+                                                    label: const Text(
+                                                      'Commencer',
+                                                    ),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor:
+                                                          const Color(
+                                                            0xFF10B981,
+                                                          ),
+                                                      foregroundColor:
+                                                          Colors.white,
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            vertical: 16,
+                                                          ),
+                                                      elevation: 0,
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    setState(() => isProcessing = false);
+                                    _showError(
+                                      e.toString().replaceAll(
+                                        'Exception: ',
+                                        '',
+                                      ),
+                                    );
+                                  }
+                                },
+                          icon: isProcessing
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(Icons.link),
+                          label: Text(
+                            isProcessing ? 'Connexion...' : 'Connecter',
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
                       ),
-                    )
-                  : const Icon(Icons.link),
-              label: Text(isProcessing ? 'Connexion...' : 'Connecter'),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(120, 48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
