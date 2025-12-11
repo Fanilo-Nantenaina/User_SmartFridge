@@ -443,40 +443,23 @@ class ClientApiService {
 
   Future<Map<String, dynamic>> saveSuggestedRecipe(
     Map<String, dynamic> suggestion,
+    int fridgeId,
   ) async {
+    final enrichedSuggestion = Map<String, dynamic>.from(suggestion);
+    enrichedSuggestion['fridge_id'] = fridgeId;
+
     final response = await _makeAuthenticatedRequest(
       (headers) => http
           .post(
             Uri.parse('$baseUrl/recipes/save-suggested'),
             headers: headers,
-            body: json.encode(suggestion),
+            body: json.encode(enrichedSuggestion),
           )
           .timeout(timeout),
     );
 
     if (response.statusCode == 201) return json.decode(response.body);
     throw Exception('Échec de sauvegarde de la recette');
-  }
-
-  Future<List<dynamic>> getRecipes({
-    String sortBy = 'date',
-    String sortOrder = 'desc',
-  }) async {
-    final response = await _makeAuthenticatedRequest(
-      (headers) => http
-          .get(
-            Uri.parse(
-              '$baseUrl/recipes?limit=100&sort_by=$sortBy&order=$sortOrder',
-            ),
-            headers: headers,
-          )
-          .timeout(timeout),
-    );
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      return data is List ? data : [];
-    }
-    throw Exception('Erreur ${response.statusCode}');
   }
 
   Future<List<dynamic>> getFeasibleRecipes(
@@ -501,10 +484,13 @@ class ClientApiService {
     throw Exception('Erreur ${response.statusCode}');
   }
 
-  Future<List<dynamic>> getFavoriteRecipes() async {
+  Future<List<dynamic>> getFavoriteRecipes({required int fridgeId}) async {
     final response = await _makeAuthenticatedRequest(
       (headers) => http
-          .get(Uri.parse('$baseUrl/recipes/favorites/mine'), headers: headers)
+          .get(
+            Uri.parse('$baseUrl/recipes/favorites/mine?fridge_id=$fridgeId'),
+            headers: headers,
+          )
           .timeout(timeout),
     );
     if (response.statusCode == 200) {
@@ -514,23 +500,26 @@ class ClientApiService {
     throw Exception('Erreur ${response.statusCode}');
   }
 
-  Future<void> addRecipeToFavorites(int recipeId) async {
+  Future<void> addRecipeToFavorites(int recipeId, int fridgeId) async {
     final response = await _makeAuthenticatedRequest(
       (headers) => http
           .post(
             Uri.parse('$baseUrl/recipes/$recipeId/favorite'),
             headers: headers,
+            body: json.encode({'fridge_id': fridgeId}), // ✅ AJOUT
           )
           .timeout(timeout),
     );
     if (response.statusCode != 201) throw Exception('Échec d\'ajout');
   }
 
-  Future<void> removeRecipeFromFavorites(int recipeId) async {
+  Future<void> removeRecipeFromFavorites(int recipeId, int fridgeId) async {
     final response = await _makeAuthenticatedRequest(
       (headers) => http
           .delete(
-            Uri.parse('$baseUrl/recipes/$recipeId/favorite'),
+            Uri.parse(
+              '$baseUrl/recipes/$recipeId/favorite?fridge_id=$fridgeId',
+            ),
             headers: headers,
           )
           .timeout(timeout),
@@ -548,7 +537,13 @@ class ClientApiService {
           .timeout(const Duration(seconds: 60)),
     );
 
-    if (response.statusCode == 200) return json.decode(response.body);
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (!data.containsKey('fridge_id')) {
+        data['fridge_id'] = fridgeId;
+      }
+      return data;
+    }
     throw Exception('Échec de suggestion: ${response.statusCode}');
   }
 

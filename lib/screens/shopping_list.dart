@@ -8,6 +8,9 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:user_smartfridge/service/fridge.dart';
 
+final GlobalKey<_ShoppingListsPageState> shoppingListsPageKey =
+    GlobalKey<_ShoppingListsPageState>();
+
 class ShoppingListsPage extends StatefulWidget {
   const ShoppingListsPage({super.key});
 
@@ -67,6 +70,12 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     });
 
     _loadShoppingLists();
+  }
+
+  void refresh() {
+    if (mounted) {
+      _loadShoppingLists();
+    }
   }
 
   Future<void> _initializeDateFormatting() async {
@@ -143,12 +152,10 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
         return;
       }
 
-      // ✅ PROTECTION : Vérifier que le frigo sélectionné existe
       if (_selectedFridgeId == null) {
         final fridgeService = FridgeService();
         _selectedFridgeId = await fridgeService.getSelectedFridge();
 
-        // Si le frigo sauvegardé n'existe pas, prendre le premier
         if (_selectedFridgeId == null ||
             !fridges.any((f) => f['id'] == _selectedFridgeId)) {
           _selectedFridgeId = fridges[0]['id'];
@@ -685,7 +692,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     switch (generatedBy) {
       case 'ai_suggestion':
         icon = Icons.auto_awesome;
-        color = const Color(0xFF8B5CF6);
+        color = const Color(0xFF3B82F6);
         label = 'IA';
         break;
       case 'auto_recipe':
@@ -726,135 +733,180 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
   Future<void> _showCreateListDialog() async {
     if (_selectedFridgeId == null) return;
 
+    bool isGenerating = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.6,
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outline.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
+      isDismissible: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => WillPopScope(
+          onWillPop: () async => !isGenerating,
+          child: Container(
+            height: MediaQuery.of(context).size.height * 0.6,
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+            ),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        width: 40,
+                        height: 4,
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.blue.shade700,
-                              Colors.blue.shade900,
-                            ],
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.outline.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.blue.shade700,
+                                  Colors.blue.shade900,
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.add_shopping_cart,
+                              color: Colors.white,
+                              size: 24,
+                            ),
                           ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.add_shopping_cart,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Nouvelle liste',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(
-                                  context,
-                                ).textTheme.bodyLarge?.color,
-                              ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Nouvelle liste',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(
+                                      context,
+                                    ).textTheme.bodyLarge?.color,
+                                  ),
+                                ),
+                                Text(
+                                  isGenerating
+                                      ? 'Génération en cours...'
+                                      : 'Choisissez comment créer votre liste',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium?.color,
+                                  ),
+                                ),
+                              ],
                             ),
-                            Text(
-                              'Choisissez comment créer votre liste',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Theme.of(
-                                  context,
-                                ).textTheme.bodyMedium?.color,
-                              ),
+                          ),
+                          if (!isGenerating)
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(context),
                             ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // Options
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    _buildCreateOptionTile(
-                      icon: Icons.auto_awesome,
-                      title: 'Génération intelligente',
-                      subtitle:
-                          'L\'IA analyse votre inventaire et suggère les produits manquants',
-                      color: const Color(0xFF8B5CF6),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _generateAIList();
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    _buildCreateOptionTile(
-                      icon: Icons.restaurant_menu,
-                      title: 'Depuis des recettes',
-                      subtitle:
-                          'Sélectionnez des recettes pour générer la liste des ingrédients',
-                      color: const Color(0xFFF59E0B),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _showRecipeSelectionDialog();
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    _buildCreateOptionTile(
-                      icon: Icons.edit_note,
-                      title: 'Liste manuelle',
-                      subtitle:
-                          'Créez votre propre liste en ajoutant les articles un par un',
-                      color: const Color(0xFF10B981),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _createManualList();
-                      },
-                    ),
-                  ],
                 ),
-              ),
+                const Divider(height: 1),
+                // Options
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        _buildCreateOptionTile(
+                          icon: Icons.auto_awesome,
+                          title: isGenerating
+                              ? 'Génération en cours...'
+                              : 'Génération intelligente',
+                          subtitle: isGenerating
+                              ? 'L\'IA analyse votre inventaire, veuillez patienter'
+                              : 'L\'IA analyse votre inventaire et suggère les produits manquants',
+                          color: const Color(0xFF3B82F6),
+                          isDisabled: isGenerating,
+                          onTap: () async {
+                            setDialogState(() => isGenerating = true);
+
+                            try {
+                              final suggestion = await _api
+                                  .suggestDiverseProducts(_selectedFridgeId!);
+
+                              if (!mounted) return;
+
+                              Navigator.pop(context);
+
+                              final suggestedProducts =
+                                  suggestion['suggested_products']
+                                      as List<dynamic>? ??
+                                  [];
+
+                              if (suggestedProducts.isEmpty) {
+                                _showError(
+                                  suggestion['message'] ??
+                                      'Aucune suggestion disponible',
+                                );
+                                return;
+                              }
+
+                              _showSuggestedProductsDialog(suggestion);
+                            } catch (e) {
+                              setDialogState(() => isGenerating = false);
+                              _showError('Erreur : $e');
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildCreateOptionTile(
+                          icon: Icons.restaurant_menu,
+                          title: 'Depuis des recettes',
+                          subtitle:
+                              'Sélectionnez des recettes pour générer la liste des ingrédients',
+                          color: const Color(0xFFF59E0B),
+                          isDisabled: isGenerating,
+                          onTap: () {
+                            Navigator.pop(context);
+                            _showRecipeSelectionDialog();
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildCreateOptionTile(
+                          icon: Icons.edit_note,
+                          title: 'Liste manuelle',
+                          subtitle:
+                              'Créez votre propre liste en ajoutant les articles un par un',
+                          color: const Color(0xFF10B981),
+                          isDisabled: isGenerating,
+                          onTap: () {
+                            Navigator.pop(context);
+                            _createManualList();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1270,11 +1322,12 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
           ),
           child: Column(
             children: [
-              // Header
+              // ==================== HEADER ====================
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
+                    // Handle bar
                     Container(
                       width: 40,
                       height: 4,
@@ -1286,12 +1339,19 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                       ),
                     ),
                     const SizedBox(height: 20),
+
+                    // Header content
                     Row(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.blue.shade700,
+                            gradient: LinearGradient(
+                              colors: [
+                                const Color(0xFF8B5CF6),
+                                const Color(0xFF8B5CF6).withOpacity(0.9),
+                              ],
+                            ),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
@@ -1329,20 +1389,24 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                         ),
                       ],
                     ),
+
+                    // Diversity note
                     if (diversityNote.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.blue.shade700,
+                          color: const Color(0xFF3B82F6).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.blue.shade900),
+                          border: Border.all(
+                            color: const Color(0xFF3B82F6).withOpacity(0.3),
+                          ),
                         ),
                         child: Row(
                           children: [
                             const Icon(
                               Icons.lightbulb_outline,
-                              color: Colors.blue,
+                              color: Color(0xFF3B82F6),
                               size: 20,
                             ),
                             const SizedBox(width: 12),
@@ -1351,7 +1415,9 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                                 diversityNote,
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: Colors.blue.shade900,
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyMedium?.color,
                                 ),
                               ),
                             ),
@@ -1364,7 +1430,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
               ),
               const Divider(height: 1),
 
-              // Liste des produits suggérés
+              // ==================== LISTE DES PRODUITS ====================
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.all(16),
@@ -1385,26 +1451,33 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                           context,
                         ).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.blue.shade700),
+                        border: Border.all(
+                          color: const Color(0xFF3B82F6).withOpacity(0.3),
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
+                              // Icône de catégorie
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.shade700,
+                                  color: const Color(
+                                    0xFF8B5CF6,
+                                  ).withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Icon(
                                   _getCategoryIcon(category),
-                                  color: Colors.blue.shade700,
+                                  color: const Color(0xFF8B5CF6),
                                   size: 20,
                                 ),
                               ),
                               const SizedBox(width: 12),
+
+                              // Nom et catégorie
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1431,36 +1504,70 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                                   ],
                                 ),
                               ),
+
+                              // Badge quantité
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.shade700,
+                                  color: const Color(
+                                    0xFF3B82F6,
+                                  ).withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: const Color(
+                                      0xFF3B82F6,
+                                    ).withOpacity(0.3),
+                                  ),
                                 ),
                                 child: Text(
                                   '$quantity $unit',
                                   style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.blue,
+                                    color: Color(0xFF3B82F6),
                                   ),
                                 ),
                               ),
                             ],
                           ),
+
+                          // Raison (si présente)
                           if (reason.isNotEmpty) ...[
                             const SizedBox(height: 8),
-                            Text(
-                              reason,
-                              style: TextStyle(
-                                fontSize: 12,
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
                                 color: Theme.of(
                                   context,
-                                ).textTheme.bodySmall?.color,
-                                fontStyle: FontStyle.italic,
+                                ).colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    size: 14,
+                                    color: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall?.color,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      reason,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.color,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -1471,7 +1578,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                 ),
               ),
 
-              // Actions
+              // ==================== FOOTER ACTIONS ====================
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -1487,6 +1594,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                 child: SafeArea(
                   child: Row(
                     children: [
+                      // Bouton "Autre suggestion"
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () {
@@ -1497,9 +1605,8 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                           label: const Text('Autre suggestion'),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            side: BorderSide(
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
+                            side: BorderSide(color: const Color(0xFF3B82F6)),
+                            foregroundColor: const Color(0xFF3B82F6),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -1507,6 +1614,8 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                         ),
                       ),
                       const SizedBox(width: 12),
+
+                      // Bouton "Enregistrer"
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () {
@@ -1516,7 +1625,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                           icon: const Icon(Icons.save),
                           label: const Text('Enregistrer'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue.shade400,
+                            backgroundColor: const Color(0xFF3B82F6),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             elevation: 0,
@@ -2288,7 +2397,19 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
     Set<int> selectedRecipeIds = {};
 
     try {
-      recipes = await _api.getFeasibleRecipes(_selectedFridgeId!);
+      // ✅ Récupérer les recettes réalisables du frigo actuel
+      final feasibleRecipesData = await _api.getFeasibleRecipes(
+        _selectedFridgeId!,
+      );
+
+      // ✅ Extraire les recettes depuis la structure retournée
+      recipes = feasibleRecipesData.map((item) {
+        if (item is Map<String, dynamic> && item.containsKey('recipe')) {
+          return item['recipe'] as Map<String, dynamic>;
+        }
+        return item;
+      }).toList();
+
       final totalRecipes = recipes.length;
 
       if (kDebugMode) {
@@ -2318,22 +2439,45 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
         return status != 'cancelled';
       }).toList();
 
-      final Set<int> recipesWithActiveLists = activeLists
-          .where((list) => list['recipe_id'] != null)
-          .map<int>((list) => list['recipe_id'] as int)
-          .toSet();
+      // ✅ Cast plus sûr pour éviter l'exception
+      final Set<int> recipesWithActiveLists = {};
+      for (var list in activeLists) {
+        final recipeId = list['recipe_id'];
+        if (recipeId != null) {
+          if (recipeId is int) {
+            recipesWithActiveLists.add(recipeId);
+          } else if (recipeId is String) {
+            final parsedId = int.tryParse(recipeId);
+            if (parsedId != null) {
+              recipesWithActiveLists.add(parsedId);
+            }
+          }
+        }
+      }
 
       if (kDebugMode) {
         print('Recipe IDs avec liste active: $recipesWithActiveLists');
       }
 
+      // ✅ Filtrer les recettes qui n'ont pas de liste active
       recipes = recipes.where((recipe) {
-        final recipeId = recipe['id'] as int;
-        final hasActiveListe = recipesWithActiveLists.contains(recipeId);
+        final recipeId = recipe['id'];
+        if (recipeId == null) return false;
+
+        int? recipeIdInt;
+        if (recipeId is int) {
+          recipeIdInt = recipeId;
+        } else if (recipeId is String) {
+          recipeIdInt = int.tryParse(recipeId);
+        }
+
+        if (recipeIdInt == null) return false;
+
+        final hasActiveListe = recipesWithActiveLists.contains(recipeIdInt);
 
         if (kDebugMode) {
           print(
-            'Recette ${recipe['title']} (ID: $recipeId) '
+            'Recette ${recipe['title']} (ID: $recipeIdInt) '
             '- A liste active: $hasActiveListe',
           );
         }
@@ -2381,7 +2525,7 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                     children: [
                       const Text('Choisir des recettes'),
                       Text(
-                        '${recipes.length}/$totalRecipes recette(s) disponible(s)', // ✅ Affichage du total
+                        '${recipes.length}/$totalRecipes recette(s) disponible(s)',
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.normal,
@@ -2430,15 +2574,30 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
                       itemCount: recipes.length,
                       itemBuilder: (context, index) {
                         final recipe = recipes[index];
-                        final recipeId = recipe['id'] as int;
-                        final isSelected = selectedRecipeIds.contains(recipeId);
+
+                        // ✅ Cast sûr de l'ID
+                        int? recipeIdInt;
+                        final recipeId = recipe['id'];
+                        if (recipeId is int) {
+                          recipeIdInt = recipeId;
+                        } else if (recipeId is String) {
+                          recipeIdInt = int.tryParse(recipeId);
+                        }
+
+                        if (recipeIdInt == null) {
+                          return const SizedBox.shrink();
+                        }
+
+                        final isSelected = selectedRecipeIds.contains(
+                          recipeIdInt,
+                        );
 
                         return CheckboxListTile(
                           value: isSelected,
                           onChanged: (value) => setDialogState(() {
                             value == true
-                                ? selectedRecipeIds.add(recipeId)
-                                : selectedRecipeIds.remove(recipeId);
+                                ? selectedRecipeIds.add(recipeIdInt!)
+                                : selectedRecipeIds.remove(recipeIdInt);
                           }),
                           activeColor: const Color(0xFFF59E0B),
                           title: Row(
@@ -2495,6 +2654,10 @@ class _ShoppingListsPageState extends State<ShoppingListsPage>
         ),
       );
     } catch (e) {
+      if (kDebugMode) {
+        print('Erreur complète: $e');
+        print('Stack trace: ${StackTrace.current}');
+      }
       _showError('Erreur de chargement des recettes : $e');
       return;
     }
