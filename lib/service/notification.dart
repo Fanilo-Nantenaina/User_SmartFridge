@@ -6,12 +6,13 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
+import 'package:user_smartfridge/service/api.dart';
 import 'package:vibration/vibration.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print('🔔 Message background: ${message.notification?.title}');
+  print('📬 Message background: ${message.notification?.title}');
 
   if (message.notification != null) {
     await NotificationService().showNotification(
@@ -38,6 +39,9 @@ class NotificationService {
   bool _vibrationEnabled = true;
   bool _soundEnabled = true;
 
+  // ✅ NOUVEAU : Callback pour navigation (sera défini depuis main.dart)
+  Function(String? payload)? onNotificationTap;
+
   Future<void> initialize() async {
     try {
       await _initializeFirebase();
@@ -47,11 +51,11 @@ class NotificationService {
       await _loadPreferences();
 
       if (kDebugMode) {
-        print('NotificationService initialized');
+        print('✅ NotificationService initialized');
       }
     } catch (e) {
       if (kDebugMode) {
-        print('NotificationService init error: $e');
+        print('❌ NotificationService init error: $e');
       }
     }
   }
@@ -71,7 +75,7 @@ class NotificationService {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Firebase init error: $e');
+        print('❌ Firebase init error: $e');
       }
     }
   }
@@ -81,16 +85,18 @@ class NotificationService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('fcm_token', token);
 
-      // TODO: Envoyer au backend
-      // final api = ClientApiService();
-      // await api.saveFCMToken(token);
+      final savedFridgeId = prefs.getInt('selected_fridge_id');
+      if (savedFridgeId != null) {
+        final api = ClientApiService();
+        await api.registerFCMToken(fridgeId: savedFridgeId, fcmToken: token);
 
-      if (kDebugMode) {
-        print('FCM Token saved');
+        if (kDebugMode) {
+          print('✅ FCM token registered on backend for fridge $savedFridgeId');
+        }
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error saving FCM token: $e');
+        print('❌ Error registering FCM token: $e');
       }
     }
   }
@@ -112,7 +118,7 @@ class NotificationService {
 
     await _localNotifications.initialize(
       initSettings,
-      onDidReceiveNotificationResponse: _onNotificationTap,
+      onDidReceiveNotificationResponse: _onNotificationTapHandler,
     );
 
     if (Platform.isAndroid) {
@@ -146,22 +152,36 @@ class NotificationService {
         provisional: false,
       );
       if (kDebugMode) {
-        print('iOS permission status: ${settings.authorizationStatus}');
+        print('📲 iOS permission status: ${settings.authorizationStatus}');
       }
     }
 
-    if (Platform.isAndroid && Platform.version.contains('13')) {
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >()
-          ?.requestNotificationsPermission();
+    // Android 13+ uniquement
+    if (Platform.isAndroid) {
+      try {
+        final androidPlugin = _localNotifications
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+
+        if (androidPlugin != null) {
+          // ✅ Nom correct de la méthode
+          final granted = await androidPlugin.requestNotificationsPermission();
+
+          if (kDebugMode) {
+            print('📲 Android notification permission: $granted');
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('⚠️ Android permission (auto-granted on <13): $e');
+        }
+      }
     }
   }
 
   Future<void> _setupMessageHandlers() async {
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
     FirebaseMessaging.onMessageOpenedApp.listen(_handleBackgroundMessage);
 
     final initialMessage = await _firebaseMessaging.getInitialMessage();
@@ -174,7 +194,7 @@ class NotificationService {
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
     if (kDebugMode) {
-      print('Foreground message: ${message.notification?.title}');
+      print('📨 Foreground message: ${message.notification?.title}');
     }
 
     final notification = message.notification;
@@ -192,17 +212,25 @@ class NotificationService {
 
   Future<void> _handleBackgroundMessage(RemoteMessage message) async {
     if (kDebugMode) {
-      print('Background message opened: ${message.notification?.title}');
+      print('🔔 Background message opened: ${message.notification?.title}');
     }
 
     final data = message.data;
 
-    // TODO: Navigation
-    if (data['action'] == 'open_alert') {
-      if (kDebugMode) {
-        print('Navigate to alert: ${data['alert_id']}');
-      }
+    // ✅ CORRECTION : Appeler le callback de navigation au lieu de naviguer directement
+    if (data['action'] == 'open_alert' && data['alert_id'] != null) {
+      onNotificationTap?.call(data['alert_id']?.toString());
     }
+  }
+
+  // ✅ CORRECTION : Handler interne qui appelle le callback externe
+  void _onNotificationTapHandler(NotificationResponse response) {
+    if (kDebugMode) {
+      print('👆 Notification tapped: ${response.payload}');
+    }
+
+    // Appeler le callback défini depuis main.dart
+    onNotificationTap?.call(response.payload);
   }
 
   Future<void> showNotification({
@@ -217,21 +245,14 @@ class NotificationService {
       channelDescription: 'Notifications pour les alertes du frigo',
       importance: Importance.max,
       priority: Priority.high,
-
       enableVibration: _vibrationEnabled,
       vibrationPattern: _vibrationEnabled
           ? Int64List.fromList([0, 500, 200, 500])
           : null,
-
       playSound: _soundEnabled,
-      sound: _soundEnabled
-          ? const RawResourceAndroidNotificationSound('notification')
-          : null,
-
       icon: '@mipmap/ic_launcher',
       color: _getColorForAlertType(alertType),
       styleInformation: BigTextStyleInformation(body),
-
       number: 1,
       autoCancel: true,
     );
@@ -240,7 +261,6 @@ class NotificationService {
       presentAlert: true,
       presentBadge: true,
       presentSound: _soundEnabled,
-      sound: _soundEnabled ? 'notification.aiff' : null,
       badgeNumber: 1,
     );
 
@@ -270,7 +290,7 @@ class NotificationService {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Vibration error: $e');
+        print('⚠️ Vibration error: $e');
       }
     }
   }
@@ -287,17 +307,6 @@ class NotificationService {
         return const Color(0xFF1976D2);
       default:
         return const Color(0xFF6A1B9A);
-    }
-  }
-
-  void _onNotificationTap(NotificationResponse response) {
-    if (kDebugMode) {
-      print('👆 Notification tapped: ${response.payload}');
-    }
-
-    // TODO: Navigation
-    if (response.payload != null) {
-      // NavigationService.navigateToAlert(int.parse(response.payload!));
     }
   }
 

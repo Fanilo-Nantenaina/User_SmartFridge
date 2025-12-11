@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,6 +29,22 @@ Future<void> main() async {
   await Firebase.initializeApp();
   tz.initializeTimeZones();
   await NotificationService().initialize();
+
+  NotificationService().onNotificationTap = (payload) {
+    if (payload != null) {
+      // Navigation vers AlertsPage (index 4)
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (context) => const HomePage(initialIndex: 4),
+        ),
+        (route) => false,
+      );
+
+      // Optional : Highlight l'alerte spécifique
+      // final alertId = int.tryParse(payload);
+      // if (alertId != null) { ... }
+    }
+  };
 
   await ThemeSwitcher().init();
   await FridgeService().initialize();
@@ -163,13 +180,31 @@ class _HomePageState extends State<HomePage> {
         await Future.delayed(const Duration(milliseconds: 150));
       }
 
+      // ✅ NOUVEAU : Enregistrer le FCM token après sélection du frigo
+      final fcmToken = NotificationService().fcmToken;
+      if (fcmToken != null && _selectedFridgeId != null) {
+        try {
+          await api.registerFCMToken(
+            fridgeId: _selectedFridgeId!,
+            fcmToken: fcmToken,
+          );
+          if (kDebugMode) {
+            print('✅ FCM token registered for fridge $_selectedFridgeId');
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print('⚠️ Failed to register FCM token: $e');
+          }
+        }
+      }
+
       await _loadAllBadges();
 
       if (mounted) {
         setState(() => _isInitializing = false);
       }
     } catch (e) {
-      print('Erreur initialisation: $e');
+      print('❌ Erreur initialisation: $e');
       if (mounted) {
         setState(() => _isInitializing = false);
       }

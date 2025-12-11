@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ClientApiService {
-  static const String baseUrl = 'http://10.0.2.2:8000/api/v1';
+  static const String baseUrl = 'http://localhost:8000/api/v1';
   static const Duration timeout = Duration(seconds: 30);
 
   String? _accessToken;
@@ -899,6 +899,20 @@ class ClientApiService {
       return json.decode(response.body);
     }
     throw Exception('Échec de suggestion: ${response.statusCode}');
+  }
+
+  Future<void> registerFCMToken({
+    required int fridgeId,
+    required String fcmToken,
+  }) async {
+    final response = await _makeAuthenticatedRequest(
+          (headers) => http.post(
+        Uri.parse('$baseUrl/fridges/$fridgeId/register-fcm-token'),
+        headers: headers,
+        body: json.encode({'fcm_token': fcmToken}),
+      ).timeout(timeout),
+    );
+    if (response.statusCode != 200) throw Exception('Failed to register token');
   }
 }
 

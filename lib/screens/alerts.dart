@@ -13,6 +13,8 @@ class AlertsPage extends StatefulWidget {
   State<AlertsPage> createState() => _AlertsPageState();
 }
 
+enum AlertSeverity { critical, warning, info, resolved }
+
 class _AlertsPageState extends State<AlertsPage> {
   final ClientApiService _api = ClientApiService();
   List<dynamic> _alerts = [];
@@ -556,18 +558,108 @@ class _AlertsPageState extends State<AlertsPage> {
     );
   }
 
-  Widget _buildAlertCard(Map<String, dynamic> alert) {
-    final currentStatus = _getCurrentExpiryStatus(alert);
-    final dynamicMessage = _getDynamicAlertMessage(alert);
+  AlertSeverity _getAlertSeverity(Map<String, dynamic> alert) {
     final isResolved = alert['status'] == 'resolved';
+    if (isResolved) return AlertSeverity.resolved;
 
-    final color = isResolved
-        ? const Color(0xFF10B981)
-        : _getAlertColor(alert['type'], currentStatus);
-    final icon = isResolved
-        ? Icons.check_circle_outline
-        : _getAlertIcon(alert['type'], currentStatus);
-    final title = _getAlertTitle(alert['type'], currentStatus, alert['status']);
+    final type = alert['type'] ?? '';
+
+    if (kDebugMode) {
+      print('TYPE D\'UN ALERT : $type');
+    }
+
+    switch (type) {
+      case 'EXPIRY_SOON':
+        return AlertSeverity.warning;
+      case 'EXPIRED':
+        return AlertSeverity.critical;
+      case 'LOST_ITEM':
+        return AlertSeverity.warning;
+      case 'LOW_STOCK':
+        return AlertSeverity.info;
+      default:
+        return AlertSeverity.info;
+    }
+  }
+
+  // 🎨 COULEUR basée sur la sévérité
+  Color _getAlertColorFromSeverity(AlertSeverity severity) {
+    switch (severity) {
+      case AlertSeverity.critical:
+        return const Color(0xFFEF4444); // Rouge
+      case AlertSeverity.warning:
+        return const Color(0xFFF59E0B); // Orange
+      case AlertSeverity.info:
+        return const Color(0xFF3B82F6); // Bleu
+      case AlertSeverity.resolved:
+        return const Color(0xFF10B981); // Vert
+    }
+  }
+
+  // 🎭 ICÔNE basée sur la sévérité et le type
+  IconData _getAlertIconFromSeverity(AlertSeverity severity, String type) {
+    if (severity == AlertSeverity.resolved) {
+      return Icons.check_circle_outline;
+    }
+
+    // Pour les alertes d'expiration
+    if (type == 'EXPIRY_SOON' || type == 'EXPIRED') {
+      switch (severity) {
+        case AlertSeverity.critical:
+          return Icons.dangerous_outlined;
+        case AlertSeverity.warning:
+          return Icons.warning_outlined;
+        default:
+          return Icons.schedule_outlined;
+      }
+    }
+
+    // Autres types
+    switch (type) {
+      case 'LOST_ITEM':
+        return Icons.search_off_outlined;
+      case 'LOW_STOCK':
+        return Icons.trending_down;
+      default:
+        return Icons.notification_important_outlined;
+    }
+  }
+
+  // 📝 TITRE basé sur la sévérité
+  String _getAlertTitleFromSeverity(AlertSeverity severity, String type) {
+    if (severity == AlertSeverity.resolved) {
+      return 'Alerte résolue';
+    }
+
+    if (type == 'EXPIRY_SOON' || type == 'EXPIRED') {
+      switch (severity) {
+        case AlertSeverity.critical:
+          return 'Produit expiré';
+        case AlertSeverity.warning:
+          return 'Expiration proche';
+        default:
+          return 'Alerte produit';
+      }
+    }
+
+    switch (type) {
+      case 'LOST_ITEM':
+        return 'Objet non détecté';
+      case 'LOW_STOCK':
+        return 'Stock faible';
+      default:
+        return 'Alerte';
+    }
+  }
+
+  Widget _buildAlertCard(Map<String, dynamic> alert) {
+    final severity = _getAlertSeverity(alert);
+    final type = alert['type'] ?? '';
+
+    final color = _getAlertColorFromSeverity(severity);
+    final icon = _getAlertIconFromSeverity(severity, type);
+    final title = _getAlertTitleFromSeverity(severity, type);
+    final dynamicMessage = _getDynamicAlertMessage(alert);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -651,13 +743,13 @@ class _AlertsPageState extends State<AlertsPage> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(alert['status']).withOpacity(0.1),
+                    color: color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     _getStatusText(alert['status']),
                     style: TextStyle(
-                      color: _getStatusColor(alert['status']),
+                      color: color,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -867,16 +959,14 @@ class _AlertsPageState extends State<AlertsPage> {
 
   Widget _buildAlertsList() {
     final criticalAlerts = _alerts
-        .where((a) => _getCurrentExpiryStatus(a) == 'expired')
+        .where((a) => _getAlertSeverity(a) == AlertSeverity.critical)
         .toList();
-    final warningAlerts = _alerts.where((a) {
-      final status = _getCurrentExpiryStatus(a);
-      return status == 'expires_today' || status == 'expiring_soon';
-    }).toList();
-    final infoAlerts = _alerts.where((a) {
-      final status = _getCurrentExpiryStatus(a);
-      return !['expired', 'expires_today', 'expiring_soon'].contains(status);
-    }).toList();
+    final warningAlerts = _alerts
+        .where((a) => _getAlertSeverity(a) == AlertSeverity.warning)
+        .toList();
+    final infoAlerts = _alerts
+        .where((a) => _getAlertSeverity(a) == AlertSeverity.info)
+        .toList();
 
     return RefreshIndicator(
       onRefresh: _loadAlerts,
@@ -905,7 +995,7 @@ class _AlertsPageState extends State<AlertsPage> {
             _buildSectionHeader(
               'Information',
               infoAlerts.length,
-              const Color(0xFF3B82F6),
+              const Color(0x3B82F6),
             ),
             ...infoAlerts.map((alert) => _buildAlertCard(alert)),
           ],
@@ -1049,25 +1139,14 @@ class _AlertsPageState extends State<AlertsPage> {
     }
   }
 
-  Color _getStatusColor(String? status) {
-    switch (status) {
-      case 'resolved':
-        return const Color(0xFF10B981);
-      case 'acknowledged':
-        return const Color(0xFF3B82F6);
-      default:
-        return const Color(0xFFF59E0B);
-    }
-  }
-
   String _getStatusText(String? status) {
     switch (status) {
       case 'resolved':
         return 'Résolue';
-      case 'acknowledged':
-        return 'Vue';
-      default:
+      case 'pending':
         return 'En attente';
+      default:
+        return 'Vue';
     }
   }
 
