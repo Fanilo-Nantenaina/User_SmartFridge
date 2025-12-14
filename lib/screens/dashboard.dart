@@ -1,7 +1,7 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:user_smartfridge/screens/auth.dart';
+import 'package:user_smartfridge/screens/fridge_stats.dart';
 import 'package:user_smartfridge/screens/search_inventory.dart';
 import 'package:user_smartfridge/service/api.dart';
 import 'package:user_smartfridge/service/fridge.dart';
@@ -21,6 +21,8 @@ class _DashboardPageState extends State<DashboardPage> {
   List<dynamic> _fridges = [];
   int? _selectedFridgeId;
   Map<String, dynamic> _stats = {};
+  Map<String, dynamic> _summary = {};
+  List<dynamic> _recentEvents = [];
   bool _isLoading = true;
 
   final _fridgeService = FridgeService();
@@ -29,7 +31,6 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
-
     _fridgeSubscription = _fridgeService.fridgeStream.listen((fridgeId) {
       if (fridgeId != null && fridgeId != _selectedFridgeId) {
         _selectedFridgeId = fridgeId;
@@ -50,12 +51,14 @@ class _DashboardPageState extends State<DashboardPage> {
 
     try {
       final fridges = await _api.getFridges();
-
       setState(() {
         _fridges = fridges;
-        _loadStats();
         _isLoading = false;
       });
+
+      if (_selectedFridgeId != null) {
+        await Future.wait([_loadStats(), _loadSummary(), _loadRecentEvents()]);
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       _handleError(e);
@@ -84,13 +87,33 @@ class _DashboardPageState extends State<DashboardPage> {
         };
       });
     } catch (e) {
-      _showError('Erreur de chargement');
+      _showError('Erreur de chargement des stats');
     }
   }
 
-  void _onFridgeChanged(int fridgeId) async {
-    await _fridgeService.setSelectedFridge(fridgeId);
-    _loadStats();
+  Future<void> _loadSummary() async {
+    if (_selectedFridgeId == null) return;
+
+    try {
+      final summary = await _api.getFridgeSummary(_selectedFridgeId!);
+      setState(() => _summary = summary);
+    } catch (e) {
+      print('Erreur summary: $e');
+    }
+  }
+
+  Future<void> _loadRecentEvents() async {
+    if (_selectedFridgeId == null) return;
+
+    try {
+      final response = await _api.getEvents(
+        fridgeId: _selectedFridgeId!,
+        pageSize: 10, // Seulement les 10 derniers
+      );
+      setState(() => _recentEvents = response['items'] ?? []);
+    } catch (e) {
+      print('Erreur events: $e');
+    }
   }
 
   void _handleError(dynamic e) {
@@ -136,7 +159,9 @@ class _DashboardPageState extends State<DashboardPage> {
                         else ...[
                           _buildFridgeCard(),
                           _buildStatsGrid(),
+                          if (_summary.isNotEmpty) _buildSummarySection(),
                           _buildQuickActions(),
+                          if (_recentEvents.isNotEmpty) _buildRecentActivity(),
                         ],
                       ],
                     ),
@@ -176,14 +201,14 @@ class _DashboardPageState extends State<DashboardPage> {
           FridgeSelector(
             fridges: _fridges,
             selectedFridgeId: _selectedFridgeId,
-            onFridgeChanged: _onFridgeChanged,
           ),
           const SizedBox(width: 8),
         ],
         Container(
           margin: const EdgeInsets.only(right: 8),
           child: IconButton.filled(
-            icon: const Icon(Icons.qr_code_scanner),
+            //icon: const Icon(Icons.qr_code_scanner),
+            icon: const Icon(Icons.link, size: 20),
             onPressed: _showPairingDialog,
             style: IconButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
@@ -439,6 +464,128 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Widget _buildSummarySection() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.insights,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Résumé',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                  ],
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            FridgeStatisticsPage(fridgeId: _selectedFridgeId!),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.arrow_forward, size: 16),
+                  label: const Text('Voir plus'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_summary['critical_alerts'] != null)
+              _buildSummaryRow(
+                Icons.warning_amber,
+                'Alertes critiques',
+                _summary['critical_alerts'].toString(),
+                const Color(0xFFEF4444),
+              ),
+            if (_summary['recent_events'] != null) ...[
+              const SizedBox(height: 12),
+              _buildSummaryRow(
+                Icons.history,
+                'Événements (30j)',
+                _summary['recent_events'].toString(),
+                Theme.of(context).colorScheme.primary,
+              ),
+            ],
+            if (_summary['estimated_value'] != null) ...[
+              const SizedBox(height: 12),
+              _buildSummaryRow(
+                Icons.euro,
+                'Valeur estimée',
+                '${_summary['estimated_value']}€',
+                const Color(0xFF10B981),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryRow(
+    IconData icon,
+    String label,
+    String value,
+    Color color,
+  ) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            color: Theme.of(context).textTheme.bodyMedium?.color,
+          ),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildQuickActions() {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -479,9 +626,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   'Voir les recettes',
                   Icons.restaurant_menu_outlined,
                   const Color(0xFF8B5CF6),
-                  () {
-                    homePageKey.currentState?.changeTab(2);
-                  },
+                  () => homePageKey.currentState?.changeTab(2),
                 ),
               ),
             ],
@@ -495,9 +640,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   'Mes listes',
                   Icons.shopping_cart_outlined,
                   const Color(0xFF10B981),
-                  () {
-                    homePageKey.currentState?.changeTab(3);
-                  },
+                  () => homePageKey.currentState?.changeTab(3),
                 ),
               ),
               const SizedBox(width: 12),
@@ -507,9 +650,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   'Voir les alertes',
                   Icons.notifications_outlined,
                   const Color(0xFFF59E0B),
-                  () {
-                    homePageKey.currentState?.changeTab(4);
-                  },
+                  () => homePageKey.currentState?.changeTab(4),
                 ),
               ),
             ],
@@ -572,8 +713,164 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // Méthode complète à remplacer dans dashboard.dart
-  // N'oubliez pas d'importer : import 'package:user_smartfridge/widgets/otp_input.dart';
+  // 🆕 NOUVEAU : Section activité récente
+  Widget _buildRecentActivity() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.timeline,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Activité récente',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                  ],
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => FridgeStatisticsPage(
+                          fridgeId: _selectedFridgeId!,
+                          initialTab: 1,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.arrow_forward, size: 16),
+                  label: const Text('Tout voir'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ..._recentEvents.take(5).map((event) => _buildEventTile(event)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEventTile(Map<String, dynamic> event) {
+    final type = event['type'] as String;
+    final payload = event['payload'] as Map<String, dynamic>? ?? {};
+    final createdAt = DateTime.parse(event['created_at']);
+    final timeAgo = _formatTimeAgo(createdAt);
+
+    IconData icon;
+    Color color;
+    String title;
+
+    switch (type) {
+      case 'ITEM_ADDED':
+        icon = Icons.add_circle_outline;
+        color = const Color(0xFF10B981);
+        title = payload['product_name'] ?? 'Produit ajouté';
+        break;
+      case 'ITEM_CONSUMED':
+        icon = Icons.remove_circle_outline;
+        color = const Color(0xFF3B82F6);
+        title = payload['product_name'] ?? 'Produit consommé';
+        break;
+      case 'ITEM_DETECTED':
+        icon = Icons.camera_alt_outlined;
+        color = const Color(0xFF8B5CF6);
+        title = 'Scan IA détecté';
+        break;
+      case 'ALERT_CREATED':
+        icon = Icons.warning_amber;
+        color = const Color(0xFFF59E0B);
+        title = 'Alerte créée';
+        break;
+      default:
+        icon = Icons.circle_outlined;
+        color = Theme.of(context).colorScheme.onSurfaceVariant;
+        title = type.replaceAll('_', ' ');
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
+                ),
+                Text(
+                  timeAgo,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).textTheme.bodySmall?.color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTimeAgo(DateTime dateTime) {
+    final difference = DateTime.now().difference(dateTime);
+
+    if (difference.inMinutes < 1) return 'À l\'instant';
+    if (difference.inHours < 1) return 'Il y a ${difference.inMinutes}min';
+    if (difference.inDays < 1) return 'Il y a ${difference.inHours}h';
+    if (difference.inDays < 7) return 'Il y a ${difference.inDays}j';
+
+    return 'Le ${dateTime.day}/${dateTime.month}';
+  }
 
   Future<void> _showPairingDialog() async {
     final nameController = TextEditingController(text: 'Mon Frigo');

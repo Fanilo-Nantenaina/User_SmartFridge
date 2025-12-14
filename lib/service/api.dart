@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ClientApiService {
-  static const String baseUrl = 'http://localhost:8000/api/v1';
+  static const String baseUrl = 'http://10.0.2.2:8000/api/v1';
   static const Duration timeout = Duration(seconds: 30);
 
   String? _accessToken;
@@ -906,13 +906,119 @@ class ClientApiService {
     required String fcmToken,
   }) async {
     final response = await _makeAuthenticatedRequest(
-          (headers) => http.post(
-        Uri.parse('$baseUrl/fridges/$fridgeId/register-fcm-token'),
-        headers: headers,
-        body: json.encode({'fcm_token': fcmToken}),
-      ).timeout(timeout),
+      (headers) => http
+          .post(
+            Uri.parse('$baseUrl/fridges/$fridgeId/register-fcm-token'),
+            headers: headers,
+            body: json.encode({'fcm_token': fcmToken}),
+          )
+          .timeout(timeout),
     );
     if (response.statusCode != 200) throw Exception('Failed to register token');
+  }
+
+  Future<Map<String, dynamic>> getFridgeStatistics(int fridgeId) async {
+    final response = await _makeAuthenticatedRequest(
+      (headers) => http
+          .get(
+            Uri.parse('$baseUrl/fridges/$fridgeId/statistics'),
+            headers: headers,
+          )
+          .timeout(timeout),
+    );
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Erreur ${response.statusCode}');
+  }
+
+  Future<Map<String, dynamic>> getFridgeSummary(int fridgeId) async {
+    final response = await _makeAuthenticatedRequest(
+      (headers) => http
+          .get(
+            Uri.parse('$baseUrl/fridges/$fridgeId/summary'),
+            headers: headers,
+          )
+          .timeout(timeout),
+    );
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Erreur ${response.statusCode}');
+  }
+
+  Future<Map<String, dynamic>> getEvents({
+    required int fridgeId,
+    String? eventType,
+    DateTime? startDate,
+    DateTime? endDate,
+    int page = 1,
+    int pageSize = 50,
+  }) async {
+    var url =
+        '$baseUrl/fridges/$fridgeId/events?page=$page&page_size=$pageSize';
+
+    if (eventType != null) url += '&event_type=$eventType';
+    if (startDate != null) {
+      url += '&start_date=${startDate.toIso8601String()}';
+    }
+    if (endDate != null) {
+      url += '&end_date=${endDate.toIso8601String()}';
+    }
+
+    final response = await _makeAuthenticatedRequest(
+      (headers) => http.get(Uri.parse(url), headers: headers).timeout(timeout),
+    );
+
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Erreur ${response.statusCode}');
+  }
+
+  Future<Map<String, dynamic>> getEventStatistics({
+    required int fridgeId,
+    int days = 30,
+  }) async {
+    final response = await _makeAuthenticatedRequest(
+      (headers) => http
+          .get(
+            Uri.parse(
+              '$baseUrl/fridges/$fridgeId/events/statistics?days=$days',
+            ),
+            headers: headers,
+          )
+          .timeout(timeout),
+    );
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Erreur ${response.statusCode}');
+  }
+
+  Future<Map<String, dynamic>> updateFridge({
+    required int fridgeId,
+    String? name,
+    String? location,
+    Map<String, dynamic>? config,
+  }) async {
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (location != null) body['location'] = location;
+    if (config != null) body['config'] = config;
+
+    final response = await _makeAuthenticatedRequest(
+      (headers) => http
+          .put(
+            Uri.parse('$baseUrl/fridges/$fridgeId'),
+            headers: headers,
+            body: json.encode(body),
+          )
+          .timeout(timeout),
+    );
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Échec de mise à jour');
+  }
+
+  Future<void> unpairFridge(int fridgeId) async {
+    final response = await _makeAuthenticatedRequest(
+      (headers) => http
+          .delete(Uri.parse('$baseUrl/fridges/$fridgeId'), headers: headers)
+          .timeout(timeout),
+    );
+    if (response.statusCode != 204) throw Exception('Échec de suppression');
   }
 }
 
