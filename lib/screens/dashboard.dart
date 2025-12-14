@@ -207,7 +207,6 @@ class _DashboardPageState extends State<DashboardPage> {
         Container(
           margin: const EdgeInsets.only(right: 8),
           child: IconButton.filled(
-            //icon: const Icon(Icons.qr_code_scanner),
             icon: const Icon(Icons.link, size: 20),
             onPressed: _showPairingDialog,
             style: IconButton.styleFrom(
@@ -541,12 +540,12 @@ class _DashboardPageState extends State<DashboardPage> {
                 Theme.of(context).colorScheme.primary,
               ),
             ],
-            if (_summary['estimated_value'] != null) ...[
+            if (_summary['active_items'] != null) ...[
               const SizedBox(height: 12),
               _buildSummaryRow(
-                Icons.euro,
-                'Valeur estimée',
-                '${_summary['estimated_value']}€',
+                Icons.inventory_2_outlined,
+                'Articles actifs',
+                _summary['active_items'].toString(),
                 const Color(0xFF10B981),
               ),
             ],
@@ -713,7 +712,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  // 🆕 NOUVEAU : Section activité récente
   Widget _buildRecentActivity() {
     return Padding(
       padding: const EdgeInsets.all(16),

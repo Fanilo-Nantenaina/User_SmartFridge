@@ -186,9 +186,9 @@ class _FridgeStatisticsPageState extends State<FridgeStatisticsPage>
               ),
               Expanded(
                 child: _buildStatItem(
-                  'Valeur estimée',
-                  '${_statistics['estimated_value'] ?? 0}€',
-                  Icons.euro,
+                  'Catégories',
+                  _statistics['categories_count']?.toString() ?? '0',
+                  Icons.category,
                 ),
               ),
             ],
