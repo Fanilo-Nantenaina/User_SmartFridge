@@ -120,6 +120,30 @@ class _RecipesPageState extends State<RecipesPage>
     }
   }
 
+  void _debugRecipePercentages(Map<String, dynamic> item) {
+    final recipe = item['recipe'] as Map<String, dynamic>;
+    final canMake = item['can_make'] as bool? ?? false;
+    final matchPercentage = _toDouble(item['match_percentage']);
+    final combinedPercentage = _toDouble(item['combined_percentage']);
+    final missingCount = (item['missing_ingredients'] as List?)?.length ?? 0;
+    final purchasedCount = item['purchased_missing_count'] as int? ?? 0;
+    final totalMissingCount = item['total_missing_count'] as int? ?? 0;
+    final shoppingStatus = item['shopping_list_status'] as String?;
+
+    if (kDebugMode) {
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('📊 DEBUG Recipe: ${recipe['title']}');
+      print('   Frigo seul: ${matchPercentage.toStringAsFixed(1)}%');
+      print('   Manquants détectés: $missingCount ingrédients');
+      print('   Total manquants: $totalMissingCount');
+      print('   Shopping list: $shoppingStatus');
+      print('   Achetés: $purchasedCount/$totalMissingCount');
+      print('   Combined: ${combinedPercentage.toStringAsFixed(1)}%');
+      print('   Complete: ${canMake || item['ingredients_complete']}');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+  }
+
   void refresh() {
     _loadRecipes(forceRefresh: true);
   }
@@ -446,7 +470,6 @@ class _RecipesPageState extends State<RecipesPage>
         ),
       );
 
-      // ✅ Sauvegarder avec fridge_id
       final savedRecipe = await _api.saveSuggestedRecipe(
         suggestion,
         _selectedFridgeId!,
@@ -800,9 +823,6 @@ class _RecipesPageState extends State<RecipesPage>
     );
   }
 
-  // ... (Le reste du code reste identique : _showSuggestedRecipeDialog, _buildRecipeCard, etc.)
-  // Je continue avec les méthodes importantes...
-
   Widget _buildFeasibleRecipes() {
     if (_selectedFridgeId == null) {
       return _buildEmptyState(
@@ -828,8 +848,12 @@ class _RecipesPageState extends State<RecipesPage>
         itemBuilder: (context, index) {
           final item = _feasibleRecipes[index];
 
-          final recipe = item['recipe'] as Map<String, dynamic>;
+          // ✅ DEBUG: Afficher les détails du calcul
+          if (index < 3) { // Debug seulement les 3 premières
+            _debugRecipePercentages(item);
+          }
 
+          final recipe = item['recipe'] as Map<String, dynamic>;
           final canMake = item['can_make'] as bool? ?? false;
           final matchPercentage = _toDouble(item['match_percentage']);
           final missingIngredients =
@@ -1277,7 +1301,6 @@ class _RecipesPageState extends State<RecipesPage>
                                 true;
 
                             if (hasMissingIngredients) {
-                              await _saveSuggestedRecipe(suggestion);
                               await _generateShoppingListFromSuggestion(
                                 suggestion,
                               );
@@ -2302,8 +2325,8 @@ class _RecipesPageState extends State<RecipesPage>
         break;
       case 'pending':
         backgroundColor = const Color(0xFFE0E7FF);
-        borderColor = const Color(0xFF6366F1);
-        textColor = const Color(0xFF3730A3);
+        borderColor = const Color(0xFF3B82F6);
+        textColor = const Color(0xFF2563EB);
         icon = Icons.list_alt;
         title = 'Liste de courses créée';
         subtitle = 'Les articles sont prêts à être achetés';
@@ -2379,7 +2402,7 @@ class _RecipesPageState extends State<RecipesPage>
         break;
       case 'pending':
         backgroundColor = const Color(0xFFE0E7FF);
-        textColor = const Color(0xFF3730A3);
+        textColor = const Color(0xFF2563EB);
         icon = Icons.list_alt;
         message = 'Liste de courses créée';
         break;

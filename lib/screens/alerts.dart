@@ -967,6 +967,9 @@ class _AlertsPageState extends State<AlertsPage> {
     final infoAlerts = _alerts
         .where((a) => _getAlertSeverity(a) == AlertSeverity.info)
         .toList();
+    final resolvedAlerts = _alerts
+        .where((a) => _getAlertSeverity(a) == AlertSeverity.resolved)
+        .toList();
 
     return RefreshIndicator(
       onRefresh: _loadAlerts,
@@ -998,6 +1001,15 @@ class _AlertsPageState extends State<AlertsPage> {
               const Color(0x3B82F6),
             ),
             ...infoAlerts.map((alert) => _buildAlertCard(alert)),
+            const SizedBox(height: 16),
+          ],
+          if (resolvedAlerts.isNotEmpty) ...[
+            _buildSectionHeader(
+              'Résolues',
+              resolvedAlerts.length,
+              const Color(0xFF10B981),
+            ),
+            ...resolvedAlerts.map((alert) => _buildAlertCard(alert)),
           ],
         ],
       ),

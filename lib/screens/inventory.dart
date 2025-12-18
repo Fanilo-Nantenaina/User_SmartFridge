@@ -393,7 +393,14 @@ class _InventoryPageState extends State<InventoryPage>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('À consommer'),
+                // ✅ Envelopper le texte dans Flexible
+                const Flexible(
+                  child: Text(
+                    'À consommer',
+                    overflow: TextOverflow.ellipsis, // ✅ AJOUT
+                    maxLines: 1, // ✅ AJOUT
+                  ),
+                ),
                 if (expiringCount > 0) ...[
                   const SizedBox(width: 6),
                   Container(
@@ -422,7 +429,14 @@ class _InventoryPageState extends State<InventoryPage>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Expirés'),
+                // ✅ Même correction pour "Expirés"
+                const Flexible(
+                  child: Text(
+                    'Expirés',
+                    overflow: TextOverflow.ellipsis, // ✅ AJOUT
+                    maxLines: 1, // ✅ AJOUT
+                  ),
+                ),
                 if (expiredCount > 0) ...[
                   const SizedBox(width: 6),
                   Container(

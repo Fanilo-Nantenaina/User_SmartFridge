@@ -431,6 +431,8 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
             padding: const EdgeInsets.all(10),
@@ -448,6 +450,8 @@ class _DashboardPageState extends State<DashboardPage> {
               fontWeight: FontWeight.bold,
               color: color,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Text(
@@ -457,6 +461,8 @@ class _DashboardPageState extends State<DashboardPage> {
               color: Theme.of(context).textTheme.bodyMedium?.color,
             ),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -880,515 +886,591 @@ class _DashboardPageState extends State<DashboardPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      isDismissible: !isProcessing,
+      isDismissible: true,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Container(
-          height: MediaQuery.of(context).size.height * 0.75,
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              // ==================== HEADER ====================
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    // Handle bar
-                    Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.outline.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Header content
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Theme.of(context).colorScheme.primary,
-                                Theme.of(
-                                  context,
-                                ).colorScheme.primary.withOpacity(0.8),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(
-                            Icons.link,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Connecter un frigo',
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(
-                                    context,
-                                  ).textTheme.bodyLarge?.color,
-                                ),
-                              ),
-                              Text(
-                                'Entrez le code du kiosk',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Theme.of(
-                                    context,
-                                  ).textTheme.bodyMedium?.color,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (!isProcessing)
-                          IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                      ],
-                    ),
-                  ],
+        builder: (context, setState) => WillPopScope(
+          onWillPop: () async => !isProcessing,
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(
+                context,
+              ).viewInsets.bottom, // ✅ AJOUT : Pousse au-dessus du clavier
+            ),
+            child: Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
                 ),
               ),
-              const Divider(height: 1),
-
-              // ==================== CONTENT ====================
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    top: 20,
-                    bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Info box
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
+              child: Column(
+                children: [
+                  // Header (reste identique)
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
                             color: Theme.of(
                               context,
-                            ).colorScheme.primary.withOpacity(0.3),
+                            ).colorScheme.outline.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(2),
                           ),
                         ),
-                        child: Row(
+                        const SizedBox(height: 20),
+                        Row(
                           children: [
-                            Icon(
-                              Icons.info_outline,
-                              color: Theme.of(context).colorScheme.primary,
-                              size: 20,
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Theme.of(context).colorScheme.primary,
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withOpacity(0.8),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.link,
+                                color: Colors.white,
+                                size: 24,
+                              ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 16),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Comment ça marche ?',
+                                    'Connecter un frigo',
                                     style: TextStyle(
-                                      fontWeight: FontWeight.w600,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.primary,
+                                      ).textTheme.bodyLarge?.color,
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
                                   Text(
-                                    '1. Regardez le code à 6 chiffres sur le kiosk\n'
-                                    '2. Entrez-le ci-dessous\n'
-                                    '3. Personnalisez votre frigo',
+                                    isProcessing
+                                        ? 'Génération en cours...'
+                                        : 'Entrez le code du kiosk',
                                     style: TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 14,
                                       color: Theme.of(
                                         context,
                                       ).textTheme.bodyMedium?.color,
-                                      height: 1.4,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
+                            if (!isProcessing)
+                              IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () => Navigator.pop(context),
+                              ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 32),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
 
-                      // OTP Section
-                      Row(
+                  // Content (avec SingleChildScrollView)
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.pin,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Code à 6 chiffres *',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                          // Info box
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
                               color: Theme.of(
                                 context,
-                              ).textTheme.bodyLarge?.color,
+                              ).colorScheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  color: Theme.of(context).colorScheme.primary,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Comment ça marche ?',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '1. Regardez le code à 6 chiffres sur le kiosk\n'
+                                        '2. Entrez-le ci-dessous\n'
+                                        '3. Personnalisez votre frigo',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Theme.of(
+                                            context,
+                                          ).textTheme.bodyMedium?.color,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
+                          const SizedBox(height: 32),
 
-                      // Widget OTP
-                      OtpInput(
-                        enabled: !isProcessing,
-                        onCompleted: (code) {
-                          setState(() => otpCode = code);
-                        },
-                      ),
-
-                      const SizedBox(height: 32),
-
-                      // Name field
-                      TextField(
-                        controller: nameController,
-                        enabled: !isProcessing,
-                        decoration: InputDecoration(
-                          labelText: 'Nom du frigo *',
-                          hintText: 'Ex: Frigo Cuisine',
-                          prefixIcon: const Icon(Icons.kitchen_outlined),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          // OTP Section
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.pin,
+                                size: 20,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Code à 6 chiffres *',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyLarge?.color,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Location field
-                      TextField(
-                        controller: locationController,
-                        enabled: !isProcessing,
-                        decoration: InputDecoration(
-                          labelText: 'Localisation (optionnel)',
-                          hintText: 'Ex: Cuisine, Bureau',
-                          prefixIcon: const Icon(Icons.location_on_outlined),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          const SizedBox(height: 16),
+                          OtpInput(
+                            enabled: !isProcessing,
+                            onCompleted: (code) {
+                              setState(() => otpCode = code);
+                            },
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+                          const SizedBox(height: 32),
 
-              // ==================== FOOTER ====================
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, -5),
-                    ),
-                  ],
-                ),
-                child: SafeArea(
-                  child: Row(
-                    children: [
-                      // Cancel button
-                      if (!isProcessing)
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
+                          // Name field
+                          TextField(
+                            controller: nameController,
+                            enabled: !isProcessing,
+                            decoration: InputDecoration(
+                              labelText: 'Nom du frigo *',
+                              hintText: 'Ex: Frigo Cuisine',
+                              prefixIcon: const Icon(Icons.kitchen_outlined),
+                              border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            child: const Text('Annuler'),
                           ),
+                          const SizedBox(height: 16),
+
+                          // Location field
+                          TextField(
+                            controller: locationController,
+                            enabled: !isProcessing,
+                            decoration: InputDecoration(
+                              labelText: 'Localisation (optionnel)',
+                              hintText: 'Ex: Cuisine, Bureau',
+                              prefixIcon: const Icon(
+                                Icons.location_on_outlined,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(
+                            height: 20,
+                          ), // ✅ Espacement supplémentaire
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Footer (reste identique)
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, -5),
                         ),
-                      if (!isProcessing) const SizedBox(width: 12),
+                      ],
+                    ),
+                    child: SafeArea(
+                      child: Row(
+                        children: [
+                          if (!isProcessing)
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(context),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text('Annuler'),
+                              ),
+                            ),
+                          if (!isProcessing) const SizedBox(width: 12),
 
-                      // Connect button
-                      Expanded(
-                        flex: 2,
-                        child: ElevatedButton.icon(
-                          onPressed: isProcessing
-                              ? null
-                              : () async {
-                                  // Validation
-                                  if (otpCode.length != 6) {
-                                    _showError(
-                                      'Le code doit contenir 6 chiffres',
-                                    );
-                                    return;
-                                  }
-                                  if (nameController.text.isEmpty) {
-                                    _showError('Donnez un nom à votre frigo');
-                                    return;
-                                  }
+                          // Connect button
+                          Expanded(
+                            flex: 2,
+                            child: ElevatedButton.icon(
+                              onPressed: isProcessing
+                                  ? null
+                                  : () async {
+                                      // Validation
+                                      if (otpCode.length != 6) {
+                                        _showError(
+                                          'Le code doit contenir 6 chiffres',
+                                        );
+                                        return;
+                                      }
+                                      if (nameController.text.isEmpty) {
+                                        _showError(
+                                          'Donnez un nom à votre frigo',
+                                        );
+                                        return;
+                                      }
 
-                                  setState(() => isProcessing = true);
+                                      setState(() => isProcessing = true);
 
-                                  try {
-                                    // API call
-                                    final result = await _api.pairFridge(
-                                      pairingCode: otpCode,
-                                      fridgeName: nameController.text,
-                                      fridgeLocation:
-                                          locationController.text.isEmpty
-                                          ? null
-                                          : locationController.text,
-                                    );
+                                      try {
+                                        // API call
+                                        final result = await _api.pairFridge(
+                                          pairingCode: otpCode,
+                                          fridgeName: nameController.text,
+                                          fridgeLocation:
+                                              locationController.text.isEmpty
+                                              ? null
+                                              : locationController.text,
+                                        );
 
-                                    Navigator.pop(context);
+                                        Navigator.pop(context);
 
-                                    // Success dialog
-                                    showModalBottomSheet(
-                                      context: context,
-                                      backgroundColor: Colors.transparent,
-                                      isDismissible: false,
-                                      builder: (context) => Container(
-                                        height:
-                                            MediaQuery.of(context).size.height *
-                                            0.5,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).cardColor,
-                                          borderRadius:
-                                              const BorderRadius.vertical(
-                                                top: Radius.circular(24),
-                                              ),
-                                        ),
-                                        child: Column(
-                                          children: [
-                                            Padding(
-                                              padding: const EdgeInsets.all(20),
-                                              child: Column(
-                                                children: [
-                                                  // Handle bar
-                                                  Container(
-                                                    width: 40,
-                                                    height: 4,
-                                                    decoration: BoxDecoration(
-                                                      color: Theme.of(context)
-                                                          .colorScheme
-                                                          .outline
-                                                          .withOpacity(0.5),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            2,
-                                                          ),
-                                                    ),
+                                        // Success dialog
+                                        // Success dialog
+                                        showModalBottomSheet(
+                                          context: context,
+                                          backgroundColor: Colors.transparent,
+                                          isDismissible: false,
+                                          isScrollControlled:
+                                              true, // ✅ IMPORTANT : Ajouter ceci
+                                          builder: (context) => Container(
+                                            height:
+                                                MediaQuery.of(
+                                                  context,
+                                                ).size.height *
+                                                0.5,
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(
+                                                context,
+                                              ).cardColor,
+                                              borderRadius:
+                                                  const BorderRadius.vertical(
+                                                    top: Radius.circular(24),
                                                   ),
-                                                  const SizedBox(height: 20),
-
-                                                  // Success icon
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.all(
-                                                          20,
+                                            ),
+                                            child: Column(
+                                              children: [
+                                                Padding(
+                                                  padding: const EdgeInsets.all(
+                                                    20,
+                                                  ),
+                                                  child: Column(
+                                                    children: [
+                                                      // Handle bar
+                                                      Container(
+                                                        width: 40,
+                                                        height: 4,
+                                                        decoration: BoxDecoration(
+                                                          color:
+                                                              Theme.of(context)
+                                                                  .colorScheme
+                                                                  .outline
+                                                                  .withOpacity(
+                                                                    0.5,
+                                                                  ),
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                2,
+                                                              ),
                                                         ),
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(
-                                                        0xFF10B981,
-                                                      ).withOpacity(0.1),
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                    child: const Icon(
-                                                      Icons.check_circle,
-                                                      color: Color(0xFF10B981),
-                                                      size: 64,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 20),
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 20,
+                                                      ),
 
-                                                  // Success title
-                                                  Text(
-                                                    'Frigo connecté !',
-                                                    style: TextStyle(
-                                                      fontSize: 24,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyLarge
-                                                          ?.color,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 8),
-
-                                                  // Success message
-                                                  Text(
-                                                    'Votre frigo "${result['fridge_name']}" est maintenant connecté.',
-                                                    textAlign: TextAlign.center,
-                                                    style: TextStyle(
-                                                      fontSize: 15,
-                                                      color: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.color,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 20),
-
-                                                  // Info box
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.all(
-                                                          16,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color: Theme.of(context)
-                                                          .colorScheme
-                                                          .surfaceContainerHighest,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            12,
+                                                      // Success icon
+                                                      Container(
+                                                        padding:
+                                                            const EdgeInsets.all(
+                                                              20,
+                                                            ),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                              color:
+                                                                  const Color(
+                                                                    0xFF10B981,
+                                                                  ).withOpacity(
+                                                                    0.1,
+                                                                  ),
+                                                              shape: BoxShape
+                                                                  .circle,
+                                                            ),
+                                                        child: const Icon(
+                                                          Icons.check_circle,
+                                                          color: Color(
+                                                            0xFF10B981,
                                                           ),
-                                                    ),
+                                                          size: 64,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(
+                                                        height: 20,
+                                                      ),
+
+                                                      // Success title
+                                                      Text(
+                                                        'Frigo connecté !',
+                                                        style: TextStyle(
+                                                          fontSize: 24,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color:
+                                                              Theme.of(context)
+                                                                  .textTheme
+                                                                  .bodyLarge
+                                                                  ?.color,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 8),
+
+                                                      // Success message
+                                                      Text(
+                                                        'Votre frigo "${result['fridge_name']}" est maintenant connecté.',
+                                                        textAlign:
+                                                            TextAlign.center,
+                                                        style: TextStyle(
+                                                          fontSize: 15,
+                                                          color:
+                                                              Theme.of(context)
+                                                                  .textTheme
+                                                                  .bodyMedium
+                                                                  ?.color,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+
+                                                // ✅ AJOUT : Expanded pour le contenu scrollable
+                                                Expanded(
+                                                  child: SingleChildScrollView(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 20,
+                                                        ),
                                                     child: Column(
                                                       children: [
-                                                        _buildInfoRow(
-                                                          Icons.kitchen,
-                                                          'Nom',
-                                                          result['fridge_name'],
+                                                        // Info box
+                                                        Container(
+                                                          padding:
+                                                              const EdgeInsets.all(
+                                                                16,
+                                                              ),
+                                                          decoration: BoxDecoration(
+                                                            color: Theme.of(context)
+                                                                .colorScheme
+                                                                .surfaceContainerHighest,
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
+                                                          ),
+                                                          child: Column(
+                                                            children: [
+                                                              _buildInfoRow(
+                                                                Icons.kitchen,
+                                                                'Nom',
+                                                                result['fridge_name'],
+                                                              ),
+                                                              if (result['fridge_location'] !=
+                                                                  null) ...[
+                                                                const SizedBox(
+                                                                  height: 8,
+                                                                ),
+                                                                _buildInfoRow(
+                                                                  Icons
+                                                                      .location_on,
+                                                                  'Lieu',
+                                                                  result['fridge_location'],
+                                                                ),
+                                                              ],
+                                                              const SizedBox(
+                                                                height: 8,
+                                                              ),
+                                                              _buildInfoRow(
+                                                                Icons.tag,
+                                                                'ID',
+                                                                '#${result['fridge_id']}',
+                                                              ),
+                                                            ],
+                                                          ),
                                                         ),
-                                                        if (result['fridge_location'] !=
-                                                            null) ...[
-                                                          const SizedBox(
-                                                            height: 8,
-                                                          ),
-                                                          _buildInfoRow(
-                                                            Icons.location_on,
-                                                            'Lieu',
-                                                            result['fridge_location'],
-                                                          ),
-                                                        ],
                                                         const SizedBox(
-                                                          height: 8,
-                                                        ),
-                                                        _buildInfoRow(
-                                                          Icons.tag,
-                                                          'ID',
-                                                          '#${result['fridge_id']}',
-                                                        ),
+                                                          height: 20,
+                                                        ), // ✅ Espacement en bas
                                                       ],
                                                     ),
                                                   ),
-                                                ],
-                                              ),
-                                            ),
-                                            const Spacer(),
+                                                ),
 
-                                            // Start button
-                                            Container(
-                                              padding: const EdgeInsets.all(20),
-                                              child: SafeArea(
-                                                child: SizedBox(
-                                                  width: double.infinity,
-                                                  child: ElevatedButton.icon(
-                                                    onPressed: () {
-                                                      Navigator.pop(context);
-                                                      _loadData();
-                                                    },
-                                                    icon: const Icon(
-                                                      Icons.check,
-                                                    ),
-                                                    label: const Text(
-                                                      'Commencer',
-                                                    ),
-                                                    style: ElevatedButton.styleFrom(
-                                                      backgroundColor:
-                                                          const Color(
-                                                            0xFF10B981,
+                                                // Start button
+                                                Container(
+                                                  padding: const EdgeInsets.all(
+                                                    20,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).cardColor,
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: Colors.black
+                                                            .withOpacity(0.05),
+                                                        blurRadius: 10,
+                                                        offset: const Offset(
+                                                          0,
+                                                          -5,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  child: SafeArea(
+                                                    child: SizedBox(
+                                                      width: double.infinity,
+                                                      child: ElevatedButton.icon(
+                                                        onPressed: () {
+                                                          Navigator.pop(
+                                                            context,
+                                                          );
+                                                          _loadData();
+                                                        },
+                                                        icon: const Icon(
+                                                          Icons.check,
+                                                        ),
+                                                        label: const Text(
+                                                          'Commencer',
+                                                        ),
+                                                        style: ElevatedButton.styleFrom(
+                                                          backgroundColor:
+                                                              const Color(
+                                                                0xFF10B981,
+                                                              ),
+                                                          foregroundColor:
+                                                              Colors.white,
+                                                          padding:
+                                                              const EdgeInsets.symmetric(
+                                                                vertical: 16,
+                                                              ),
+                                                          elevation: 0,
+                                                          shape: RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius.circular(
+                                                                  12,
+                                                                ),
                                                           ),
-                                                      foregroundColor:
-                                                          Colors.white,
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            vertical: 16,
-                                                          ),
-                                                      elevation: 0,
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              12,
-                                                            ),
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
                                                 ),
-                                              ),
+                                              ],
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                        );
+                                      } catch (e) {
+                                        setState(() => isProcessing = false);
+                                        _showError(
+                                          e.toString().replaceAll(
+                                            'Exception: ',
+                                            '',
+                                          ),
+                                        );
+                                      }
+                                    },
+                              icon: isProcessing
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
                                       ),
-                                    );
-                                  } catch (e) {
-                                    setState(() => isProcessing = false);
-                                    _showError(
-                                      e.toString().replaceAll(
-                                        'Exception: ',
-                                        '',
-                                      ),
-                                    );
-                                  }
-                                },
-                          icon: isProcessing
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.white,
-                                    ),
-                                  ),
-                                )
-                              : const Icon(Icons.link),
-                          label: Text(
-                            isProcessing ? 'Connexion...' : 'Connecter',
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                                    )
+                                  : const Icon(Icons.link),
+                              label: Text(
+                                isProcessing ? 'Connexion...' : 'Connecter',
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
